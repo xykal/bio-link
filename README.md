@@ -10,11 +10,12 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 ## ✨ Fitur
 
 **Halaman Publik (`/`)**
-- Profil: avatar, banner, nama, handle, bio + warna aksen custom
+- Profil: avatar (upload), banner, nama, handle, bio + warna aksen custom
+- **Bentuk avatar**: circle, squircle, rounded, **blob morphing animasi**, hexagon, star, heart
 - Theme **Dark / Light** (bisa diatur dari dashboard)
-- Ikon sosial media (12 platform)
+- **Logo sosial media ASLI** (brand resmi, Simple Icons - 12 platform)
 - Daftar link rapi dengan badge `Join Grup` / `Link Saluran`
-- **Gate popup** — membuka `rules.xyc.my.id/docs` sebelum masuk link grup/saluran
+- **Gate popup** — men-embed & membuka **rules asli** `rules.xyc.my.id/docs` sebelum masuk link grup/saluran
 - **Gaya font per elemen** (nama, handle, bio, judul link, label, branding)
 - Footer branding "Made by XySpace Tch"
 
