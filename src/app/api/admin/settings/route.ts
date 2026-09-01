@@ -13,6 +13,30 @@ export async function PATCH(req: Request) {
   if (body.social && typeof body.social === "object") {
     store.social = { ...store.social, ...body.social };
   }
+  if (Array.isArray(body.stack)) {
+    store.stack = body.stack
+      .filter((s: { slug?: unknown }) => s && typeof s.slug === "string" && s.slug.trim())
+      .slice(0, 40)
+      .map((s: { id?: string; slug: string }) => ({
+        id: typeof s.id === "string" && s.id ? s.id : crypto.randomUUID(),
+        slug: s.slug.trim().slice(0, 40),
+      }));
+  }
+  if (Array.isArray(body.team)) {
+    store.team = body.team
+      .filter((m: { name?: unknown }) => m && typeof m.name === "string" && m.name.trim())
+      .slice(0, 40)
+      .map((m: { id?: string; name: string; role?: string; avatar?: string; url?: string }) => ({
+        id: typeof m.id === "string" && m.id ? m.id : crypto.randomUUID(),
+        name: m.name.trim().slice(0, 60),
+        role: typeof m.role === "string" ? m.role.slice(0, 60) : "",
+        avatar: typeof m.avatar === "string" ? m.avatar.slice(0, 500) : "",
+        url: typeof m.url === "string" ? m.url.slice(0, 500) : "",
+      }));
+  }
+  if (["pill", "rounded", "soft", "square"].includes(body.linkShape)) {
+    store.linkShape = body.linkShape;
+  }
   if (body.seo && typeof body.seo === "object") {
     store.seo = { ...store.seo, ...body.seo };
   }

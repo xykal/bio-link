@@ -22,7 +22,29 @@ export type ProfileShape =
   | "abstract"
   | "hexagon"
   | "star"
-  | "heart";
+  | "heart"
+  | "octagon"
+  | "diamond"
+  | "leaf"
+  | "shield";
+
+// Bentuk tombol link di halaman publik
+export type LinkShape = "pill" | "rounded" | "soft" | "square";
+
+// Satu item tech stack / keahlian (logo asli via simple-icons slug)
+export type StackItem = {
+  id: string;
+  slug: string; // simple-icons slug, mis. "flutter"
+};
+
+// Anggota team / kontributor
+export type Member = {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string; // image url (opsional)
+  url: string; // link profil (opsional)
+};
 
 export type Profile = {
   name: string;
@@ -78,9 +100,12 @@ export type Store = {
   profile: Profile;
   links: LinkItem[];
   social: Socials;
+  stack: StackItem[];
+  team: Member[];
   fonts: FontsConfig;
   seo: SeoConfig;
   theme: ThemeMode;
+  linkShape: LinkShape;
   branding: Branding;
 };
 
@@ -166,6 +191,22 @@ const DEFAULT_STORE: Store = {
     discord: "",
     website: "https://haekal.web.id",
   },
+  stack: [
+    { id: randomUUID(), slug: "flutter" },
+    { id: randomUUID(), slug: "dart" },
+    { id: randomUUID(), slug: "kotlin" },
+    { id: randomUUID(), slug: "android" },
+    { id: randomUUID(), slug: "nextdotjs" },
+    { id: randomUUID(), slug: "react" },
+    { id: randomUUID(), slug: "typescript" },
+    { id: randomUUID(), slug: "vite" },
+    { id: randomUUID(), slug: "tailwindcss" },
+    { id: randomUUID(), slug: "nodedotjs" },
+  ],
+  team: [
+    { id: randomUUID(), name: "Haekal", role: "Founder", avatar: "", url: "https://github.com/xykalnotkel" },
+    { id: randomUUID(), name: "XySpace", role: "Team", avatar: "", url: "" },
+  ],
   fonts: {
     name: "poppins",
     handle: "space-grotesk",
@@ -182,6 +223,7 @@ const DEFAULT_STORE: Store = {
     rulesUrl: "https://rules.xyc.my.id/",
   },
   theme: "dark",
+  linkShape: "rounded",
   branding: { enabled: true, text: "Made by XySpace Tch" },
 };
 
@@ -213,9 +255,30 @@ function normalize(parsed: Partial<Store>): Store {
         }))
       : [...d.links],
     social: { ...d.social, ...(parsed.social || {}) },
+    stack: Array.isArray(parsed.stack)
+      ? parsed.stack
+          .filter((s) => s && typeof s.slug === "string" && s.slug.trim())
+          .map((s) => ({ id: s.id || randomUUID(), slug: s.slug.trim() }))
+      : [...d.stack],
+    team: Array.isArray(parsed.team)
+      ? parsed.team
+          .filter((m) => m && typeof m.name === "string" && m.name.trim())
+          .map((m) => ({
+            id: m.id || randomUUID(),
+            name: m.name.trim(),
+            role: typeof m.role === "string" ? m.role : "",
+            avatar: typeof m.avatar === "string" ? m.avatar : "",
+            url: typeof m.url === "string" ? m.url : "",
+          }))
+      : [...d.team],
     fonts: { ...d.fonts, ...(parsed.fonts || {}) },
     seo: { ...d.seo, ...(parsed.seo || {}) },
     theme: parsed.theme === "light" ? "light" : "dark",
+    linkShape: (["pill", "rounded", "soft", "square"] as const).includes(
+      parsed.linkShape as never
+    )
+      ? (parsed.linkShape as Store["linkShape"])
+      : "rounded",
     branding: { ...d.branding, ...(parsed.branding || {}) },
   };
 }

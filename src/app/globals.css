@@ -81,6 +81,22 @@ body {
   transform: rotate(-6deg) scale(1.04);
 }
 
+/* Bentuk baru: lebih rapi & modern */
+.shape-octagon {
+  clip-path: polygon(
+    30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%
+  );
+}
+.shape-diamond {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.shape-leaf {
+  border-radius: 68% 32% 68% 32% / 32% 68% 32% 68%;
+}
+.shape-shield {
+  clip-path: polygon(50% 0%, 100% 18%, 100% 62%, 50% 100%, 0% 62%, 0% 18%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shape-morph {
     animation: none;
