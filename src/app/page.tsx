@@ -1,9 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
 
 export const dynamic = "force-dynamic";
+
+// Warna chrome browser (mobile) mengikuti mode tema.
+export async function generateViewport(): Promise<Viewport> {
+  const store = await readStore();
+  return { themeColor: store.theme === "light" ? "#f7f7f9" : "#08080d" };
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   const store = await readStore();
