@@ -7,6 +7,7 @@ import { optImg } from "@/lib/img";
 import type {
   Store,
   LinkItem,
+  Socials,
   FontsConfig,
   SeoConfig,
   Branding,
@@ -49,6 +50,21 @@ const AVATAR_POSITIONS: { key: string; label: string }[] = [
   { key: "100% 100%", label: "Kanan bawah" },
 ];
 
+const SOCIAL_PLATFORMS: { key: keyof Socials; label: string; icon: string }[] = [
+  { key: "instagram", label: "Instagram", icon: "instagram" },
+  { key: "tiktok", label: "TikTok", icon: "tiktok" },
+  { key: "youtube", label: "YouTube", icon: "youtube" },
+  { key: "github", label: "GitHub", icon: "github" },
+  { key: "x", label: "X / Twitter", icon: "x" },
+  { key: "facebook", label: "Facebook", icon: "facebook" },
+  { key: "linkedin", label: "LinkedIn", icon: "linkedin" },
+  { key: "telegram", label: "Telegram", icon: "telegram" },
+  { key: "whatsapp", label: "WhatsApp", icon: "whatsapp" },
+  { key: "spotify", label: "Spotify", icon: "spotify" },
+  { key: "discord", label: "Discord", icon: "link" },
+  { key: "website", label: "Website", icon: "website" },
+];
+
 export default function AdminPanel() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [pin, setPin] = useState("");
@@ -61,6 +77,7 @@ export default function AdminPanel() {
 
   // drafts
   const [profile, setProfile] = useState<Store["profile"] | null>(null);
+  const [social, setSocial] = useState<Socials | null>(null);
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
   const [seo, setSeo] = useState<SeoConfig | null>(null);
   const [branding, setBranding] = useState<Branding | null>(null);
@@ -96,6 +113,7 @@ export default function AdminPanel() {
       const d: Store = await r.json();
       setStore(d);
       setProfile(d.profile);
+      setSocial(d.social);
       setFonts(d.fonts);
       setSeo(d.seo);
       setBranding(d.branding);
@@ -174,6 +192,7 @@ export default function AdminPanel() {
     if (r.ok) {
       const d = await r.json();
       setStore(d);
+      if (patch.social) setSocial(d.social);
       if (patch.seo) setSeo(d.seo);
       if (patch.fonts) setFonts(d.fonts);
       if (patch.branding) setBranding(d.branding);
@@ -642,6 +661,38 @@ export default function AdminPanel() {
                 <button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-medium text-white/60 transition hover:text-white">Batal</button>
               </div>
             </form>
+          )}
+        </Section>
+
+        {/* SOSIAL */}
+        <Section
+          title="Sosial Media"
+          sub="Data tersimpan & dikembalikan API. Catatan: baris sosmed tidak lagi ditampilkan di halaman publik (sesuai permintaan) — bagian ini untuk mengelola datanya saja."
+        >
+          {social && (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {SOCIAL_PLATFORMS.map((pl) => (
+                  <div key={pl.key} className="flex items-center gap-2">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/60">
+                      <Icon name={pl.icon} className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1">
+                      <label className="text-[11px] uppercase tracking-wider text-white/35">{pl.label}</label>
+                      <input
+                        className={inputCls}
+                        value={social[pl.key]}
+                        placeholder="https://…"
+                        onChange={(e) => setSocial({ ...social, [pl.key]: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => saveSettings({ social })} className={btnCls + " mt-4"}>
+                Simpan Sosial
+              </button>
+            </>
           )}
         </Section>
 
