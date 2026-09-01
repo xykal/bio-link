@@ -1,93 +1,83 @@
 # 🔗 Bio Link — Haekal
 
-Halaman bio-link (ala Linktree) untuk **Haekal**, dark-modern, lengkap dengan **panel admin** ber-URL rahasia.
+Halaman bio-link (ala Linktree) untuk **Haekal**, dark/light modern, dengan **panel admin lengkap** di `/admin`.
 
-**Live:** https://bio.haekal.web.id
+**Live:** https://bio.haekal.web.id · Repo: `xykalnotkel/bio-link`
 
-Dibangun dengan **Next.js 16** + **React 19** + **TypeScript** + **Tailwind v4**, data disimpan di **Cloudflare D1**.
+Dibangun dengan **Next.js 16** + **React 19** + **TypeScript** + **Tailwind v4**.
+Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 
 ## ✨ Fitur
 
 **Halaman Publik (`/`)**
-- Profil: avatar, nama, handle, bio + warna aksen custom
-- Ikon media sosial & quick buttons
-- Daftar link rapi dengan hover effect
-- Bonus: background glow gradient mengikuti warna aksen
+- Profil: avatar, banner, nama, handle, bio + warna aksen custom
+- Theme **Dark / Light** (bisa diatur dari dashboard)
+- Ikon sosial media (12 platform)
+- Daftar link rapi dengan badge `Join Grup` / `Link Saluran`
+- **Gate popup** — membuka `rules.xyc.my.id/docs` sebelum masuk link grup/saluran
+- **Gaya font per elemen** (nama, handle, bio, judul link, label, branding)
+- Footer branding "Made by XySpace Tch"
 
-**Panel Admin (URL rahasia)**
-- **Alamat panel di-hash & tidak pernah muncul di UI** — cuma bisa diakses lewat URL yang kamu tahu
-- Login dengan password (cookie httpOnly + di-hash path)
-- Edit profil: nama, handle, bio, avatar, warna aksen
-- Tambah / hapus / edit / **reorder** link
-- **Toggle aktif/nonaktif** link — yang off otomatis hilang dari halaman publik
-- 15+ pilihan ikon sosial media
+**Panel Admin (`/admin`)**
+- Login **PIN angka (keypad)** — password default `0099`
+- Kelola profil: nama, handle, bio, **avatar upload (tanpa URL)**, banner, warna aksen
+- Kelola semua **sosial media**
+- Kelola **link** (CRUD + reorder + toggle + tipe + gate)
+- Atur **SEO / OpenGraph**: judul, deskripsi, **favicon upload**, **OG banner upload**, URL rules
+- Atur **gaya font** masing-masing teks
+- Atur **theme** (Dark/Light) & **branding** footer
 
-## 🔐 Keamanan Panel Admin
+## 🔐 Login Admin
+- Buka `https://domain-mu/admin`
+- Masukkan PIN (default `0099` — ubah lewat env `ADMIN_PASSWORD`)
+- Input hanya angka, ala PIN/keypad → aman dari tebakan
 
-- Path admin di-hash: `https://domain-mu/<ADMIN_SECRET_PATH>` (lihat `.env.example`)
-- Path admin TIDAK ditautkan / ditampilkan dimana pun di halaman publik
-- Setiap path random (termasuk `/admin`) otomatis `404`, bukan login UI
-- Login di-lindungi password (`ADMIN_PASSWORD`)
-
-## 🚀 Mulai Lokal
+## 📦 Setup
 
 ```bash
 npm install
 npm run dev
-# halaman publik: http://localhost:3000
-# panel admin   : http://localhost:3000/<ADMIN_SECRET_PATH>
 ```
 
-> Tanpa env D1, data otomatis disimpan ke file lokal `data/store.json` (untuk dev).
-
-## ☁️ Deploy ke Vercel (sudah ter-setup)
-
-Project Vercel `bio-link` + custom domain `bio.haekal.web.id` (via Cloudflare DNS) sudah terpasang.
-
-**Environment variables di Vercel:**
+### Environment variables
 | Var | Keterangan |
 |---|---|
-| `ADMIN_PASSWORD` | Password masuk admin (jangan pernah di-commit) |
-| `ADMIN_SECRET_PATH` | Path hashed untuk panel admin |
+| `ADMIN_PASSWORD` | PIN admin (default `0099`) |
 | `CLOUDFLARE_ACCOUNT_ID` | ID akun Cloudflare |
 | `CLOUDFLARE_D1_DATABASE_ID` | ID database D1 |
 | `CLOUDFLARE_API_TOKEN` | API token Cloudflare (izin D1) |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
 
-### Setup D1 (jika bikin ulang)
-```bash
-# buat database
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/d1/database" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"bio-link"}'
-# buat tabel
-curl -X POST ".../d1/database/$DB_ID/query" -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" -d '{"sql":"CREATE TABLE IF NOT EXISTS store (id INTEGER PRIMARY KEY, data TEXT NOT NULL);"}'
-```
+> Tanpa env D1 → otomatis pakai file lokal `data/store.json` (untuk dev).
+> Tanpa env Cloudinary → tombol upload nonaktif, tapi URL manual tetap bisa.
 
-Tombol deploy: biso pakai `vercel --prod` atau hubungkan repo ke Vercel. Setelah push ke GitHub, jalankan `npx vercel deploy --prod`.
+## ☁️ Deploy
+- Vercel project `bio-link` + custom domain `bio.haekal.web.id` (DNS Cloudflare) sudah terpasang.
+- Deploy: `npx vercel --prod` atau connect repo ke Vercel.
+
+## 🗄️ Storage: Cloudflare D1
+Tabel `store(id INTEGER PRIMARY KEY, data TEXT NOT NULL)`. Seluruh JSON disimpan sebagai satu row (`id` = 1). Diakses via **REST API** (berfungsi dari runtime serverless mana pun).
 
 ## 📁 Struktur
-
 ```
 src/
 ├── app/
-│   ├── page.tsx                 # halaman publik bio-link
-│   ├── [adminSecret]/page.tsx   # panel admin (path hashed → 404 utk path lain)
+│   ├── page.tsx                 # halaman publik + generateMetadata (SEO/OG)
+│   ├── admin/page.tsx           # panel admin
 │   └── api/
-│       ├── data/route.ts        # data publik (hanya link aktif)
+│       ├── data/route.ts        # data publik (links enabled + config)
+│       ├── upload/route.ts      # upload image ke Cloudinary (signed)
 │       ├── auth/                # login/logout/session
-│       └── admin/               # CRUD link & profil (auth protected)
+│       └── admin/               # profile / links / settings CRUD
 ├── components/
-│   ├── BioPage.tsx
-│   ├── AdminPanel.tsx
-│   └── Icons.tsx
+│   ├── BioPage.tsx              # halaman publik (theme, gate, fonts, branding)
+│   ├── AdminPanel.tsx           # dashboard admin (PIN, settings)
+│   ├── FontLoader.tsx           # injeksi Google Fonts runtime
+│   └── Icons.tsx                # ikon SVG
 └── lib/
     ├── data.ts                  # storage (Cloudflare D1 / file fallback)
-    └── auth.ts                  # session + secret path
+    ├── auth.ts                  # PIN auth + session cookie
+    └── fonts.ts                 # curated font set + google fonts builder
 ```
-
-## 🛠️ Tech Stack
-- Next.js 16 (App Router, Turbopack) · React 19 · Tailwind v4 · TypeScript
-- Cloudflare D1 (REST API) untuk penyimpanan
-- Session cookie auth (httpOnly) + path admin hashed
-- Deploy: Vercel · DNS: Cloudflare
