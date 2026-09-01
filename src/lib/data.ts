@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -27,21 +26,17 @@ export type Store = {
 
 // ---------------------------------------------------------------------------
 //  Storage selector
-//  - If SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set  -> use Supabase (prod / Vercel)
-//  - Otherwise -> fall back to a JSON file (local dev)
+//  - If CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_D1_DATABASE_ID + CLOUDFLARE_API_TOKEN
+//    are set  -> use Cloudflare D1 (prod / Vercel)
+//  - Otherwise -> fall back to a local JSON file (dev)
 // ---------------------------------------------------------------------------
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const useSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
+const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "";
+const CF_DB = process.env.CLOUDFLARE_D1_DATABASE_ID || "";
+const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "";
+const useD1 = Boolean(CF_ACCOUNT && CF_DB && CF_TOKEN);
 
-const TABLE = "bio_store";
+const TABLE = "store";
 const ROW_ID = 1;
-
-function getClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // ---------------------------------------------------------------------------
 //  Default / seed data
@@ -101,49 +96,54 @@ const DEFAULT_STORE: Store = {
 function normalize(parsed: Partial<Store>): Store {
   return {
     profile: { ...DEFAULT_STORE.profile, ...(parsed.profile || {}) },
-    links: Array.isArray(parsed.links)
-      ? parsed.links
-      : [...DEFAULT_STORE.links],
+    links: Array.isArray(parsed.links) ? parsed.links : [...DEFAULT_STORE.links],
   };
 }
 
 // ---------------------------------------------------------------------------
-//  Supabase-backed
+//  Cloudflare D1 (via REST API) — works from any Node.js runtime incl. Vercel
 // ---------------------------------------------------------------------------
-async function sbRead(): Promise<Store> {
-  const client = getClient();
-  const { data, error } = await client
-    .from(TABLE)
-    .select("data")
-    .eq("id", ROW_ID)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Supabase read error: ${error.message}`);
+async function d1Query(sql: string): Promise<any> {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/d1/database/${CF_DB}/query`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CF_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ sql }),
+  });
+  const json = await res.json();
+  if (!json.success) {
+    throw new Error(`D1 error: ${JSON.stringify(json.errors || json)}`);
   }
+  return json.result;
+}
 
-  if (!data) {
-    // seed
+async function d1Read(): Promise<Store> {
+  const rows = await d1Query(`SELECT data FROM ${TABLE} WHERE id = ${ROW_ID}`);
+  const first = rows?.[0]?.results?.[0];
+  if (!first) {
+    // seed default then write
     const store = normalize({});
-    await sbWrite(store);
+    await d1Write(store);
     return store;
   }
-  return normalize(data.data);
+  return normalize(JSON.parse(first.data));
 }
 
-async function sbWrite(store: Store): Promise<void> {
-  const client = getClient();
-  const { error } = await client
-    .from(TABLE)
-    .upsert({ id: ROW_ID, data: store }, { onConflict: "id" });
-
-  if (error) {
-    throw new Error(`Supabase write error: ${error.message}`);
-  }
+async function d1Write(store: Store): Promise<void> {
+  const data = JSON.stringify(store);
+  // escape single quotes for SQL
+  const escaped = data.replace(/'/g, "''");
+  await d1Query(
+    `INSERT INTO ${TABLE} (id, data) VALUES (${ROW_ID}, '${escaped}')
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data;`
+  );
 }
 
 // ---------------------------------------------------------------------------
-//  File-backed (local dev fallback)
+//  Local file fallback (dev)
 // ---------------------------------------------------------------------------
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -172,11 +172,11 @@ async function fileWrite(store: Store): Promise<void> {
 //  Public API used by routes
 // ---------------------------------------------------------------------------
 export async function readStore(): Promise<Store> {
-  return useSupabase ? sbRead() : fileRead();
+  return useD1 ? d1Read() : fileRead();
 }
 
 export async function writeStore(store: Store): Promise<void> {
-  return useSupabase ? sbWrite(store) : fileWrite(store);
+  return useD1 ? d1Write(store) : fileWrite(store);
 }
 
-export { useSupabase };
+export { useD1 };
