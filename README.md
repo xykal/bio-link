@@ -1,92 +1,93 @@
-# 🔗 Bio Link
+# 🔗 Bio Link — Haekal
 
-Halaman bio-link (ala Linktree) yang rapi, dark-modern, lengkap dengan **panel admin** untuk mengelola profil dan link kamu tanpa ribet.
+Halaman bio-link (ala Linktree) untuk **Haekal**, dark-modern, lengkap dengan **panel admin** ber-URL rahasia.
 
-Dibangun dengan **Next.js 16** + **React 19** + **TypeScript** + **Tailwind CSS v4**.
+**Live:** https://bio.haekal.web.id
+
+Dibangun dengan **Next.js 16** + **React 19** + **TypeScript** + **Tailwind v4**, data disimpan di **Cloudflare D1**.
 
 ## ✨ Fitur
 
 **Halaman Publik (`/`)**
-- Profil: avatar, nama, handle, bio
-- Warna aksen bisa diubah (gradient ring & tombol mengikuti warna)
+- Profil: avatar, nama, handle, bio + warna aksen custom
 - Ikon media sosial & quick buttons
 - Daftar link rapi dengan hover effect
+- Bonus: background glow gradient mengikuti warna aksen
 
-**Panel Admin (`/admin`)**
-- Login dengan password (cookie httpOnly session)
-- Edit profil: nama, handle, bio, avatar URL, warna aksen
-- Tambah / hapus link
-- Update link inline
-- **Reorder** urutan link (naik/turun) — bisa disimpan di `/admin/links/reorder`
-- **Toggle aktif/nonaktif** link (yang nonaktif otomatis hilang dari halaman publik)
+**Panel Admin (URL rahasia)**
+- **Alamat panel di-hash & tidak pernah muncul di UI** — cuma bisa diakses lewat URL yang kamu tahu
+- Login dengan password (cookie httpOnly + di-hash path)
+- Edit profil: nama, handle, bio, avatar, warna aksen
+- Tambah / hapus / edit / **reorder** link
+- **Toggle aktif/nonaktif** link — yang off otomatis hilang dari halaman publik
 - 15+ pilihan ikon sosial media
 
-## 🚀 Mulai Cepat
+## 🔐 Keamanan Panel Admin
+
+- Path admin di-hash: `https://domain-mu/<ADMIN_SECRET_PATH>` (lihat `.env.example`)
+- Path admin TIDAK ditautkan / ditampilkan dimana pun di halaman publik
+- Setiap path random (termasuk `/admin`) otomatis `404`, bukan login UI
+- Login di-lindungi password (`ADMIN_PASSWORD`)
+
+## 🚀 Mulai Lokal
 
 ```bash
 npm install
 npm run dev
+# halaman publik: http://localhost:3000
+# panel admin   : http://localhost:3000/<ADMIN_SECRET_PATH>
 ```
 
-Buka **http://localhost:3000** untuk halaman publik dan **http://localhost:3000/admin** untuk panel admin.
+> Tanpa env D1, data otomatis disimpan ke file lokal `data/store.json` (untuk dev).
 
-> Default password admin: `admin123` (ubah lewat env `ADMIN_PASSWORD` sebelum produksi)
+## ☁️ Deploy ke Vercel (sudah ter-setup)
 
-## 🔑 Setup Password
+Project Vercel `bio-link` + custom domain `bio.haekal.web.id` (via Cloudflare DNS) sudah terpasang.
 
-Buat file `.env.local`:
-
-```bash
-cp .env.example .env.local
-# lalu ubah ADMIN_PASSWORD
-```
-
-## 🗄️ Penyimpanan Data
-
-Data disimpan di file `data/store.json` (filesystem). Di development/lokal ini langsung ter-write. **Untuk produksi di Vercel**, lihat catatan di bawah — karena filesystem tidak persisten di serverless, kamu perlu pindah ke database (mis. Postgres/Supabase) atau storage lain.
-
-## 📦 Script
-
-| Command | Fungsi |
+**Environment variables di Vercel:**
+| Var | Keterangan |
 |---|---|
-| `npm run dev` | Jalankan development server |
-| `npm run build` | Build untuk produksi |
-| `npm run start` | Jalankan hasil build |
-| `npm run lint` | Lint dengan ESLint |
+| `ADMIN_PASSWORD` | Password masuk admin (jangan pernah di-commit) |
+| `ADMIN_SECRET_PATH` | Path hashed untuk panel admin |
+| `CLOUDFLARE_ACCOUNT_ID` | ID akun Cloudflare |
+| `CLOUDFLARE_D1_DATABASE_ID` | ID database D1 |
+| `CLOUDFLARE_API_TOKEN` | API token Cloudflare (izin D1) |
 
-## ☁️ Deploy ke Vercel
+### Setup D1 (jika bikin ulang)
+```bash
+# buat database
+curl -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/d1/database" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"bio-link"}'
+# buat tabel
+curl -X POST ".../d1/database/$DB_ID/query" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"sql":"CREATE TABLE IF NOT EXISTS store (id INTEGER PRIMARY KEY, data TEXT NOT NULL);"}'
+```
 
-1. Push repo ini ke GitHub.
-2. Import repo di [vercel.com](https://vercel.com) → create New Project.
-3. Tambahkan environment variable `ADMIN_PASSWORD`.
-4. Deploy. 🎉
-
-> ⚠️ **Catatan penting Vercel:** karena data memakai file sistem (`data/store.json`), perubahan admin tidak persisten pada fungsi serverless yang stateless. Untuk pemakaian nyata di Vercel, ganti `src/lib/data.ts` agar membaca/menulis ke PostgreSQL (mis. Supabase) atau Vercel KV/Blob. Bagian frontend & API sudah siap — tinggal swap layer datanya.
+Tombol deploy: biso pakai `vercel --prod` atau hubungkan repo ke Vercel. Setelah push ke GitHub, jalankan `npx vercel deploy --prod`.
 
 ## 📁 Struktur
 
 ```
 src/
 ├── app/
-│   ├── page.tsx              # halaman publik bio-link
-│   ├── admin/page.tsx        # panel admin
+│   ├── page.tsx                 # halaman publik bio-link
+│   ├── [adminSecret]/page.tsx   # panel admin (path hashed → 404 utk path lain)
 │   └── api/
-│       ├── data/route.ts     # data publik (hanya link aktif)
-│       ├── auth/             # login/logout/session
-│       └── admin/            # CRUD link & profil (auth protected)
+│       ├── data/route.ts        # data publik (hanya link aktif)
+│       ├── auth/                # login/logout/session
+│       └── admin/               # CRUD link & profil (auth protected)
 ├── components/
-│   ├── BioPage.tsx           # UI halaman publik
-│   ├── AdminPanel.tsx        # UI panel admin
-│   └── Icons.tsx             # ikon SVG sosial media
+│   ├── BioPage.tsx
+│   ├── AdminPanel.tsx
+│   └── Icons.tsx
 └── lib/
-    ├── data.ts               # layer penyimpanan (filesystem)
-    └── auth.ts               # autentikasi session cookie
+    ├── data.ts                  # storage (Cloudflare D1 / file fallback)
+    └── auth.ts                  # session + secret path
 ```
 
 ## 🛠️ Tech Stack
-
-- Next.js 16 (App Router, Turbopack)
-- React 19
-- Tailwind CSS v4
-- TypeScript
-- Session cookie auth (httpOnly)
+- Next.js 16 (App Router, Turbopack) · React 19 · Tailwind v4 · TypeScript
+- Cloudflare D1 (REST API) untuk penyimpanan
+- Session cookie auth (httpOnly) + path admin hashed
+- Deploy: Vercel · DNS: Cloudflare
