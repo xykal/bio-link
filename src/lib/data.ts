@@ -13,6 +13,15 @@ export type LinkItem = {
   kind?: "link" | "join_group" | "channel"; // used for labelling
 };
 
+export type ProfileShape =
+  | "circle"
+  | "squircle"
+  | "blob"
+  | "hexagon"
+  | "star"
+  | "heart"
+  | "rounded";
+
 export type Profile = {
   name: string;
   handle: string;
@@ -20,6 +29,7 @@ export type Profile = {
   avatar: string; // medium URL from Cloudinary (optional)
   banner: string; // medium URL from Cloudinary (optional)
   accent: string; // theme accent color
+  shape: ProfileShape;
 };
 
 export type Socials = {
@@ -90,6 +100,7 @@ const DEFAULT_STORE: Store = {
     avatar: "",
     banner: "",
     accent: "#8b5cf6",
+    shape: "circle",
   },
   links: [
     {

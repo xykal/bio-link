@@ -33,6 +33,46 @@ body {
   background: rgba(139, 92, 246, 0.3);
 }
 
+/* ---------- Avatar shapes ---------- */
+.shape-circle {
+  border-radius: 50%;
+}
+.shape-squircle {
+  border-radius: 30%;
+}
+.shape-rounded {
+  border-radius: 22%;
+}
+.shape-hexagon {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.shape-star {
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%,
+    2% 35%, 39% 35%
+  );
+}
+.shape-heart {
+  clip-path: polygon(
+    50% 32%, 60% 18%, 73% 13%, 88% 18%, 96% 32%,
+    90% 50%, 72% 70%, 50% 90%, 28% 70%, 10% 50%,
+    4% 32%, 12% 18%, 27% 13%, 40% 18%
+  );
+}
+/* Animated blob (morphing) */
+.shape-blob {
+  animation: blobmorph 12s ease-in-out infinite, blobRotate 24s linear infinite;
+}
+@keyframes blobmorph {
+  0%, 100% { border-radius: 60% 40% 55% 45% / 55% 45% 60% 40%; }
+  25% { border-radius: 45% 55% 40% 60% / 60% 40% 55% 45%; }
+  50% { border-radius: 55% 45% 60% 40% / 40% 60% 45% 55%; }
+  75% { border-radius: 40% 60% 45% 55% / 55% 60% 40% 45%; }
+}
+@keyframes blobRotate {
+  to { transform: rotate(360deg) scale(1.03); }
+}
+
 /* scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

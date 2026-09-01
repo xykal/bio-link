@@ -15,6 +15,13 @@ export async function PATCH(req: Request) {
   if (typeof body.avatar === "string") store.profile.avatar = body.avatar.trim();
   if (typeof body.banner === "string") store.profile.banner = body.banner.trim();
   if (typeof body.accent === "string") store.profile.accent = body.accent.trim();
+  if (
+    ["circle", "squircle", "rounded", "blob", "hexagon", "star", "heart"].includes(
+      body.shape as string
+    )
+  ) {
+    store.profile.shape = body.shape;
+  }
 
   await writeStore(store);
   return NextResponse.json(store.profile);

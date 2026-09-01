@@ -10,7 +10,18 @@ import type {
   FontsConfig,
   SeoConfig,
   Branding,
+  ProfileShape,
 } from "@/lib/data";
+
+const SHAPES: { key: ProfileShape; label: string; icon: string }[] = [
+  { key: "circle", label: "Circle", icon: "●" },
+  { key: "squircle", label: "Squircle", icon: "▢" },
+  { key: "rounded", label: "Rounded", icon: "▣" },
+  { key: "blob", label: "Blob", icon: "✦" },
+  { key: "hexagon", label: "Hexagon", icon: "⬡" },
+  { key: "star", label: "Star", icon: "★" },
+  { key: "heart", label: "Heart", icon: "♥" },
+];
 
 const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
 const SOCIAL_KEYS: (keyof Socials)[] = [
@@ -377,6 +388,25 @@ export default function AdminPanel() {
                 <ImageField label="Avatar (upload)" value={profile.avatar} onChange={(v) => setProfile({ ...profile, avatar: v })} onUpload={upload} folder="bio-link/avatar" />
                 <ImageField label="Banner" value={profile.banner} onChange={(v) => setProfile({ ...profile, banner: v })} onUpload={upload} folder="bio-link/banner" />
               </div>
+              <Field label="Bentuk avatar">
+                <div className="flex flex-wrap gap-2">
+                  {SHAPES.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      title={s.label}
+                      onClick={() => setProfile({ ...profile, shape: s.key })}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl border text-lg transition ${
+                        profile.shape === s.key
+                          ? "border-violet-400/70 bg-violet-500/20 text-white"
+                          : "border-white/10 bg-white/5 text-white/50 hover:text-white"
+                      }`}
+                    >
+                      {s.icon}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               <Field label="Warna aksen">
                 <div className="flex flex-wrap gap-2">
                   {ACCENTS.map((c) => (

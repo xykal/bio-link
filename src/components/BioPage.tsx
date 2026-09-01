@@ -151,13 +151,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </div>
           ) : null}
 
-          {/* avatar */}
+          {/* avatar (dynamic shape) */}
           <div
-            className="flex items-center justify-center rounded-[2rem] p-[3px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.4)]"
-            style={{ background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})` }}
+            className={`avatar-frame flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${profile?.shape || "circle"}`}
+            style={{
+              background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})`,
+              width: 118,
+              height: 118,
+            }}
           >
             <div
-              className={`h-28 w-28 overflow-hidden rounded-[1.8rem] ${
+              className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${
                 isLight ? "bg-white" : "bg-[#111118]"
               }`}
             >
@@ -312,18 +316,33 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             <h2 className="mt-4 text-lg font-bold" style={{ fontFamily: "var(--font-link)" }}>
               {gateLink.title}
             </h2>
-            <p className="mt-2 text-sm opacity-60" style={{ fontFamily: "var(--font-bio)" }}>
-              Sebelum lanjut, kamu wajib membaca &amp; memahami aturan komunitas kami terlebih
-              dahulu. Ini demi kenyamanan bersama. 🙏
+            <p className="mt-1 text-xs uppercase tracking-wider opacity-45" style={{ fontFamily: "var(--font-label)" }}>
+              Baca rules dulu sebelum lanjut
             </p>
-            <div className="mt-5 space-y-2.5">
+
+            {/* embed the REAL rules page (rules.xyc.my.id/docs) */}
+            <div
+              className={`mt-3 overflow-hidden rounded-2xl border ${isLight ? "border-black/10" : "border-white/10"} bg-black/20`}
+              style={{ height: 220 }}
+            >
+              <iframe
+                src={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
+                title="Rules"
+                className="h-full w-full"
+                loading="lazy"
+                sandbox="allow-same-origin allow-scripts allow-popups"
+                style={{ border: 0, background: "#fff" }}
+              />
+            </div>
+
+            <div className="mt-4 space-y-2.5">
               <a
                 href={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
                 target="_blank"
                 rel="noreferrer"
                 className="block w-full rounded-xl border border-white/15 py-3 text-sm font-semibold opacity-80 transition hover:opacity-100"
               >
-                📖 Baca Rules
+                📖 Buka Rules di tab baru
               </a>
               <button
                 onClick={() => {
@@ -333,7 +352,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 className="w-full rounded-xl py-3 text-sm font-semibold text-white transition hover:brightness-110"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
               >
-                Ya, Lanjut →
+                {gateLink.kind === "join_group" ? "Join Grup →" : "Buka Saluran →"}
               </button>
               <button
                 onClick={() => setGateLink(null)}
