@@ -4,14 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
+import { getTechIcon } from "@/lib/stackIcons";
 import type { LinkItem, Store } from "@/lib/data";
 
 type PublicData = {
   profile: Store["profile"];
   links: LinkItem[];
   social: Store["social"];
+  stack: Store["stack"];
+  team: Store["team"];
   fonts: Store["fonts"];
   theme: "dark" | "light";
+  linkShape: Store["linkShape"];
   branding: Store["branding"];
   rulesUrl: string;
 };
@@ -40,8 +44,11 @@ function toPublic(s: Store): PublicData {
     profile: s.profile,
     links: s.links.filter((l) => l.enabled).sort((a, b) => a.order - b.order),
     social: s.social,
+    stack: s.stack || [],
+    team: s.team || [],
     fonts: s.fonts,
     theme: s.theme,
+    linkShape: s.linkShape || "rounded",
     branding: s.branding,
     rulesUrl: s.seo.rulesUrl,
   };
@@ -54,6 +61,13 @@ function hexToRgb(hex: string) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+const LINK_RADIUS: Record<string, number> = {
+  pill: 9999,
+  rounded: 16,
+  soft: 24,
+  square: 10,
+};
+
 export default function BioPage({ initial }: { initial: Store | null }) {
   const [data, setData] = useState<PublicData | null>(() =>
     initial ? toPublic(initial) : null
@@ -62,10 +76,9 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const [failed, setFailed] = useState(false);
   const [gateLink, setGateLink] = useState<LinkItem | null>(null);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
-  const pressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Semua setState di sini terjadi di callback promise (asinkron), sehingga
-  // aman terhadap aturan react-hooks/set-state-in-effect (Next 16).
+  // Semua setState terjadi di callback promise (asinkron) -> aman untuk aturan
+  // react-hooks/set-state-in-effect (React Compiler, Next 16).
   const load = useCallback(() => {
     fetch("/api/data")
       .then((r) => {
@@ -84,16 +97,13 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     load();
   }, [load]);
 
-  // retry manual dari ErrorState: reset boleh sinkron karena ini event handler
   const retry = useCallback(() => {
     setLoading(true);
     setFailed(false);
     load();
   }, [load]);
 
-  // Muat widget gate resmi (gate.js) sekali saja. Widget menarik kebijakan asli
-  // lewat API (CORS terbuka) dan merender di Shadow DOM — BUKAN iframe, karena
-  // origin rules mengirim X-Frame-Options: SAMEORIGIN.
+  // Muat widget gate resmi (gate.js) sekali saja.
   const rulesOrigin = rulesOriginOf(data?.rulesUrl);
   useEffect(() => {
     if (getXycGate()) return;
@@ -105,15 +115,6 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     s.async = true;
     document.head.appendChild(s);
   }, [rulesOrigin]);
-
-  function avatarPressStart() {
-    pressRef.current = setTimeout(() => setShowAvatarPreview(true), 450);
-  }
-  function avatarPressEnd() {
-    if (pressRef.current) clearTimeout(pressRef.current);
-    pressRef.current = null;
-    setShowAvatarPreview(false);
-  }
 
   function handleClick(e: React.MouseEvent, link: LinkItem) {
     if (link.gate !== "rules") return;
@@ -135,6 +136,11 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const rgb = useMemo(() => hexToRgb(accent), [accent]);
   const isLight = data?.theme === "light";
   const avatarPos = profile?.avatarPos || "50% 50%";
+  const shape = profile?.shape || "circle";
+  const linkRadius = LINK_RADIUS[data?.linkShape || "rounded"] ?? 16;
+  const ringColor = isLight ? "#f7f7f9" : "#08080d";
+  const stack = data?.stack || [];
+  const team = data?.team || [];
 
   const cssVars = useMemo(
     () =>
@@ -153,8 +159,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
   return (
     <main
-      className={`bio-page relative min-h-screen w-full overflow-hidden flex flex-col items-center px-4 py-8 transition-colors ${
-        isLight ? "text-zinc-900 bg-[#f7f7f9]" : "text-white"
+      className={`bio-page relative flex min-h-screen w-full flex-col items-center justify-center overflow-x-hidden px-4 py-6 transition-colors ${
+        isLight ? "bg-[#f7f7f9] text-zinc-900" : "text-white"
       }`}
       style={cssVars}
     >
@@ -198,24 +204,31 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </div>
             ) : null}
 
+            {/* Avatar: tanpa ring berwarna — hanya bingkai netral halus */}
             <div
-              className={`avatar-frame absolute left-1/2 -translate-x-1/2 flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${
-                profile?.shape || "circle"
-              } cursor-pointer select-none ${profile?.banner ? "-bottom-10" : "relative"}`}
+              className={`avatar-frame shape-${shape} absolute left-1/2 flex -translate-x-1/2 cursor-pointer items-center justify-center p-[3px] shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none ${
+                profile?.banner ? "-bottom-10" : "relative"
+              }`}
               style={{
-                background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})`,
+                background: isLight ? "#e6e6ec" : "rgba(255,255,255,0.10)",
                 width: 108,
                 height: 108,
               }}
-              onPointerDown={avatarPressStart}
-              onPointerUp={avatarPressEnd}
-              onPointerLeave={avatarPressEnd}
-              onPointerCancel={avatarPressEnd}
+              onClick={() => setShowAvatarPreview((v) => !v)}
+              role="button"
+              tabIndex={0}
+              aria-label="Lihat foto profil"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setShowAvatarPreview((v) => !v);
+                }
+              }}
               onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => e.preventDefault()}
             >
               <div
-                className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${
+                className={`shape-${shape} h-full w-full overflow-hidden ${
                   isLight ? "bg-white" : "bg-[#111118]"
                 }`}
               >
@@ -225,6 +238,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
                     alt={profile.name}
                     decoding="async"
+                    fetchPriority="high"
                     className="h-full w-full object-cover"
                     style={{ objectPosition: avatarPos }}
                   />
@@ -233,8 +247,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     className="flex h-full w-full items-center justify-center text-4xl font-bold"
                     style={{
                       fontFamily: "var(--font-name)",
-                      background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
-                      color: "#fff",
+                      background: isLight ? "#ececf1" : "#1b1b25",
+                      color: isLight ? "#a1a1aa" : "#4b4b5a",
                     }}
                   >
                     {(profile?.name || "?").charAt(0).toUpperCase()}
@@ -263,6 +277,34 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </p>
           )}
 
+          {/* STACK / KEAHLIAN: logo asli, sejajar kanan, tumpuk-tindih setengah */}
+          {stack.length > 0 && (
+            <div className="mt-5 flex w-full items-center justify-end" aria-label="Tech stack">
+              <div className="flex">
+                {stack.map((s, i) => {
+                  const ic = getTechIcon(s.slug);
+                  if (!ic) return null;
+                  return (
+                    <span
+                      key={s.id}
+                      title={ic.title}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md"
+                      style={{
+                        marginLeft: i === 0 ? 0 : -16,
+                        zIndex: stack.length - i,
+                        border: `2px solid ${ringColor}`,
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
+                        <path d={ic.path} fill={ic.hex} />
+                      </svg>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {data && data.links.length > 0 && (
             <div className="mt-6 w-full space-y-3">
               {data.links.map((l, i) => {
@@ -274,16 +316,19 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => handleClick(e, l)}
-                    className={`group flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`group flex w-full items-center gap-3 border px-4 py-3.5 text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
                       isLight
                         ? "border-black/5 bg-white shadow-sm hover:shadow-lg"
                         : "border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.09]"
                     }`}
-                    style={{ animationDelay: `${i * 40}ms` }}
+                    style={{ borderRadius: linkRadius, animationDelay: `${i * 40}ms` }}
                   >
                     <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
-                      style={{ background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center text-white"
+                      style={{
+                        borderRadius: linkRadius >= 9999 ? 9999 : 12,
+                        background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
+                      }}
                     >
                       <Icon name={l.icon} className="h-4.5 w-4.5" />
                     </span>
@@ -336,7 +381,74 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </div>
           )}
 
-          <footer className="mt-10">
+          {/* TEAM & CONTRIBUTOR: avatar bulat sejajar */}
+          {team.length > 0 && (
+            <div className="mt-9 w-full">
+              <p
+                className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.2em] opacity-40"
+                style={{ fontFamily: "var(--font-label)" }}
+              >
+                Team XySpace &amp; Contributor
+              </p>
+              <div className="flex flex-wrap items-start justify-center gap-x-5 gap-y-4">
+                {team.map((m) => {
+                  const inner = (
+                    <>
+                      <span
+                        className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-lg font-bold"
+                        style={{
+                          background: isLight ? "#ececf1" : "#1b1b25",
+                          color: isLight ? "#a1a1aa" : "#6b6b7b",
+                          border: `2px solid ${isLight ? "#e6e6ec" : "rgba(255,255,255,0.10)"}`,
+                        }}
+                      >
+                        {m.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={optImg(m.avatar, { w: 160, h: 160, crop: "fill" })}
+                            alt={m.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          (m.name || "?").charAt(0).toUpperCase()
+                        )}
+                      </span>
+                      <span
+                        className="mt-1.5 block w-16 truncate text-center text-[11px] font-semibold"
+                        style={{ fontFamily: "var(--font-name)" }}
+                      >
+                        {m.name}
+                      </span>
+                      {m.role && (
+                        <span className="block w-16 truncate text-center text-[10px] opacity-45">
+                          {m.role}
+                        </span>
+                      )}
+                    </>
+                  );
+                  return m.url ? (
+                    <a
+                      key={m.id}
+                      href={m.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex flex-col items-center transition hover:opacity-80"
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={m.id} className="flex flex-col items-center">
+                      {inner}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <footer className="mt-8">
             {data?.branding?.enabled ? (
               <a
                 href="https://web.haekal.web.id"
@@ -345,41 +457,42 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 className="text-xs font-medium tracking-wide opacity-30 transition hover:opacity-70"
                 style={{ fontFamily: "var(--font-brand)" }}
               >
-                {data.branding.text || "Made by XySpace Tch"}
+                {data.branding.text || "Made by XySpace"}
               </a>
-            ) : (
-              <span className="text-xs opacity-30" style={{ fontFamily: "var(--font-brand)" }}>
-                {new Date().getFullYear()} {profile?.name}
-              </span>
-            )}
+            ) : null}
           </footer>
         </div>
       )}
 
-      {/* AVATAR LONG-PRESS PREVIEW */}
+      {/* AVATAR PREVIEW (toggle: klik foto -> muncul, klik lagi / klik luar -> tutup) */}
       {showAvatarPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center transition-opacity">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          onClick={() => setShowAvatarPreview(false)}
+          role="dialog"
+          aria-modal="true"
+        >
           {profile?.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={optImg(profile.avatar, { w: 800, h: 800, crop: "fill" })}
               alt=""
               aria-hidden
-              className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-60"
+              className="absolute inset-0 h-full w-full scale-125 object-cover opacity-50 blur-3xl"
               style={{ objectPosition: avatarPos }}
             />
           ) : (
             <div
-              className="absolute inset-0 opacity-60 blur-2xl"
+              className="absolute inset-0 opacity-40 blur-3xl"
               style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
             />
           )}
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
 
-          <div className="relative z-10">
+          <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
             <div
               className="h-72 w-72 overflow-hidden rounded-full p-1 shadow-2xl"
-              style={{ background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})` }}
+              style={{ background: "rgba(255,255,255,0.14)" }}
             >
               <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
                 {profile?.avatar ? (
@@ -403,6 +516,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             >
               {profile?.name}
             </p>
+            <p className="mt-1 text-center text-xs text-white/40">Klik di mana saja untuk menutup</p>
           </div>
         </div>
       )}
@@ -420,7 +534,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <span className="flex items-center gap-2 text-sm font-semibold" style={{ fontFamily: "var(--font-link)" }}>
+              <span
+                className="flex items-center gap-2 text-sm font-semibold"
+                style={{ fontFamily: "var(--font-link)" }}
+              >
                 <Icon name="lock" className="h-4 w-4" />
                 {gateLink.title} · Rules
               </span>
@@ -438,8 +555,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             <div className="px-5 py-6 text-sm opacity-80" style={{ minHeight: 140 }}>
               <p className="mb-2 font-semibold">Widget kebijakan tidak bisa dimuat.</p>
               <p className="leading-relaxed opacity-70">
-                Koneksi ke {rulesOrigin.replace(/^https?:\/\//, "")} sedang bermasalah.
-                Baca dulu aturannya di tab baru sebelum bergabung.
+                Koneksi ke {rulesOrigin.replace(/^https?:\/\//, "")} sedang bermasalah. Baca dulu
+                aturannya di tab baru sebelum bergabung.
               </p>
             </div>
 
@@ -475,9 +592,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 function Skeleton({ isLight }: { isLight: boolean }) {
   const box = isLight ? "bg-black/10" : "bg-white/10";
   return (
-    <div className="mt-2 flex w-full max-w-md animate-pulse flex-col items-center" aria-busy="true" aria-label="Memuat halaman">
+    <div
+      className="flex w-full max-w-md animate-pulse flex-col items-center"
+      aria-busy="true"
+      aria-label="Memuat halaman"
+    >
       <div className={`h-28 w-full rounded-3xl ${box}`} />
-      <div className={`-mt-10 h-[108px] w-[108px] rounded-full border-4 ${isLight ? "border-[#f7f7f9]" : "border-[#08080d]"} ${box}`} />
+      <div
+        className={`-mt-10 h-[108px] w-[108px] rounded-full border-4 ${
+          isLight ? "border-[#f7f7f9]" : "border-[#08080d]"
+        } ${box}`}
+      />
       <div className={`mt-4 h-6 w-40 rounded-lg ${box}`} />
       <div className={`mt-2 h-4 w-24 rounded-lg ${box}`} />
       <div className={`mt-4 h-4 w-64 rounded-lg ${box}`} />
@@ -486,7 +611,6 @@ function Skeleton({ isLight }: { isLight: boolean }) {
           <div key={i} className={`h-[62px] w-full rounded-2xl ${box}`} />
         ))}
       </div>
-      <div className={`mt-10 h-3 w-32 rounded ${box}`} />
     </div>
   );
 }
@@ -494,7 +618,7 @@ function Skeleton({ isLight }: { isLight: boolean }) {
 /* ---------------- Error state dengan retry ---------------- */
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="mt-24 flex w-full max-w-sm flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white">
+    <div className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-400">
         <Icon name="alert" className="h-7 w-7" />
       </span>
