@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { readStore } from "@/lib/data";
+import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +10,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const { seo, profile } = store;
   const title = seo.title || profile.name || "Bio Link";
   const description = seo.description || profile.bio || "";
-  const icons: Metadata["icons"] = seo.favicon ? { icon: seo.favicon } : undefined;
-  const ogImages = seo.ogImage ? [{ url: seo.ogImage }] : undefined;
+  const icons: Metadata["icons"] = seo.favicon ? { icon: optImg(seo.favicon, { w: 96, h: 96, crop: "fill" }) } : undefined;
+  const ogImages = seo.ogImage ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }] : undefined;
 
   return {
     title,

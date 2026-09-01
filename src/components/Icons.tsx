@@ -20,6 +20,16 @@ export const ICON_KEYS = [
   "group",
   "channel",
   "phone",
+  "lock",
+  "chevron",
+  "moon",
+  "sun",
+  "external",
+  "refresh",
+  "alert",
+  "inbox",
+  "image",
+  "delete",
 ] as const;
 
 export type IconKey = (typeof ICON_KEYS)[number];
@@ -107,6 +117,45 @@ const strokes: Record<string, React.ReactNode> = {
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+  ),
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" strokeWidth="2" />
+    </>
+  ),
+  chevron: <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" />,
+  moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" strokeWidth="2" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none" stroke="currentColor" strokeWidth="2" />
+    </>
+  ),
+  external: (
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-3h6v6m-11 5L21 3" fill="none" stroke="currentColor" strokeWidth="2" />
+  ),
+  refresh: (
+    <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" />
+  ),
+  alert: (
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 9v4m0 4h.01" fill="none" stroke="currentColor" strokeWidth="2" />
+    </>
+  ),
+  inbox: (
+    <path d="M22 12h-6l-2 3h-4l-2-3H2m20 0V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v5m20 0v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5" fill="none" stroke="currentColor" strokeWidth="2" />
+  ),
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="m21 15-5-5L5 21" fill="none" stroke="currentColor" strokeWidth="2" />
+    </>
+  ),
+  delete: (
+    <path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-8 4-4 4m0-4 4 4" fill="none" stroke="currentColor" strokeWidth="2" />
   ),
 };
 

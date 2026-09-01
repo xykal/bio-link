@@ -16,11 +16,13 @@ export type LinkItem = {
 export type ProfileShape =
   | "circle"
   | "squircle"
+  | "rounded"
   | "blob"
+  | "morph"
+  | "abstract"
   | "hexagon"
   | "star"
-  | "heart"
-  | "rounded";
+  | "heart";
 
 export type Profile = {
   name: string;
@@ -30,6 +32,7 @@ export type Profile = {
   banner: string; // medium URL from Cloudinary (optional)
   accent: string; // theme accent color
   shape: ProfileShape;
+  avatarPos?: string; // object-position foto avatar, mis. "50% 20%"
 };
 
 export type Socials = {
@@ -96,11 +99,12 @@ const DEFAULT_STORE: Store = {
   profile: {
     name: "Haekal",
     handle: "@haekal",
-    bio: "🎨 Web, tech & digital life · Bisa aja nongkrongi hal baru ✨",
+    bio: "Web, tech & digital life. Kadang nongkrongin hal baru.",
     avatar: "",
     banner: "",
     accent: "#8b5cf6",
     shape: "circle",
+    avatarPos: "50% 50%",
   },
   links: [
     {
@@ -184,7 +188,14 @@ const DEFAULT_STORE: Store = {
 function normalize(parsed: Partial<Store>): Store {
   const d = DEFAULT_STORE;
   return {
-    profile: { ...d.profile, ...(parsed.profile || {}) },
+    profile: {
+      ...d.profile,
+      ...(parsed.profile || {}),
+      avatarPos:
+        typeof (parsed.profile || {}).avatarPos === "string"
+          ? (parsed.profile as Profile).avatarPos
+          : d.profile.avatarPos,
+    },
     links: Array.isArray(parsed.links)
       ? parsed.links.map((l) => ({
           id: l.id || randomUUID(),

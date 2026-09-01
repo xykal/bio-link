@@ -16,11 +16,29 @@ export async function PATCH(req: Request) {
   if (typeof body.banner === "string") store.profile.banner = body.banner.trim();
   if (typeof body.accent === "string") store.profile.accent = body.accent.trim();
   if (
-    ["circle", "squircle", "rounded", "blob", "hexagon", "star", "heart"].includes(
-      body.shape as string
-    )
+    [
+      "circle",
+      "squircle",
+      "rounded",
+      "blob",
+      "morph",
+      "abstract",
+      "hexagon",
+      "star",
+      "heart",
+    ].includes(body.shape as string)
   ) {
     store.profile.shape = body.shape;
+  }
+  // Posisi crop avatar (object-position). Hanya izinkan pola aman:
+  // keyword dan/atau persentase, mis. "50% 100%" atau "center top".
+  if (
+    typeof body.avatarPos === "string" &&
+    /^(left|center|right|top|bottom|\d{1,3}%)( (left|center|right|top|bottom|\d{1,3}%))?$/.test(
+      body.avatarPos.trim()
+    )
+  ) {
+    store.profile.avatarPos = body.avatarPos.trim();
   }
 
   await writeStore(store);

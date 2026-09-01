@@ -3,38 +3,50 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, ICON_KEYS } from "@/components/Icons";
 import { FONT_KEYS, FONTS, fontCss } from "@/lib/fonts";
+import { optImg } from "@/lib/img";
 import type {
   Store,
   LinkItem,
-  Socials,
   FontsConfig,
   SeoConfig,
   Branding,
   ProfileShape,
 } from "@/lib/data";
 
-const SHAPES: { key: ProfileShape; label: string; icon: string }[] = [
-  { key: "circle", label: "Circle", icon: "●" },
-  { key: "squircle", label: "Squircle", icon: "▢" },
-  { key: "rounded", label: "Rounded", icon: "▣" },
-  { key: "blob", label: "Blob", icon: "✦" },
-  { key: "hexagon", label: "Hexagon", icon: "⬡" },
-  { key: "star", label: "Star", icon: "★" },
-  { key: "heart", label: "Heart", icon: "♥" },
+const SHAPES: { key: ProfileShape; label: string }[] = [
+  { key: "circle", label: "Circle" },
+  { key: "squircle", label: "Squircle" },
+  { key: "rounded", label: "Rounded" },
+  { key: "blob", label: "Blob" },
+  { key: "morph", label: "Morphing" },
+  { key: "abstract", label: "Abstract" },
+  { key: "hexagon", label: "Hexagon" },
+  { key: "star", label: "Star" },
+  { key: "heart", label: "Heart" },
 ];
 
 const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
-const SOCIAL_KEYS: (keyof Socials)[] = [
-  "instagram", "tiktok", "youtube", "github", "x", "facebook",
-  "linkedin", "telegram", "whatsapp", "spotify", "discord", "website",
-];
+
 const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "name", label: "Nama" },
   { key: "handle", label: "Handle" },
   { key: "bio", label: "Bio" },
   { key: "linkTitle", label: "Judul Link" },
-  { key: "linkLabel", label: "Label Link" },
+  { key: "linkLabel", label: "Label" },
   { key: "brand", label: "Branding" },
+];
+
+// Posisi crop foto avatar (object-position) — picker 3x3 di panel.
+const AVATAR_POSITIONS: { key: string; label: string }[] = [
+  { key: "0% 0%", label: "Kiri atas" },
+  { key: "50% 0%", label: "Atas" },
+  { key: "100% 0%", label: "Kanan atas" },
+  { key: "0% 50%", label: "Kiri" },
+  { key: "50% 50%", label: "Tengah" },
+  { key: "100% 50%", label: "Kanan" },
+  { key: "0% 100%", label: "Kiri bawah" },
+  { key: "50% 100%", label: "Bawah" },
+  { key: "100% 100%", label: "Kanan bawah" },
 ];
 
 export default function AdminPanel() {
@@ -44,11 +56,11 @@ export default function AdminPanel() {
   const [busy, setBusy] = useState(false);
 
   const [store, setStore] = useState<Store | null>(null);
-  const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState<{ msg: string; ok: boolean } | null>(null);
 
   // drafts
   const [profile, setProfile] = useState<Store["profile"] | null>(null);
-  const [social, setSocial] = useState<Socials | null>(null);
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
   const [seo, setSeo] = useState<SeoConfig | null>(null);
   const [branding, setBranding] = useState<Branding | null>(null);
@@ -73,47 +85,66 @@ export default function AdminPanel() {
   }, []);
 
   async function loadData() {
-    const r = await fetch("/api/admin");
-    if (r.status === 401) return setAuthed(false);
-    const d: Store = await r.json();
-    setStore(d);
-    setProfile(d.profile);
-    setSocial(d.social);
-    setFonts(d.fonts);
-    setSeo(d.seo);
-    setBranding(d.branding);
-    setTheme(d.theme);
+    try {
+      const r = await fetch("/api/admin");
+      setLoadError("");
+      if (r.status === 401) {
+        setAuthed(false);
+        return;
+      }
+      if (!r.ok) throw new Error(String(r.status));
+      const d: Store = await r.json();
+      setStore(d);
+      setProfile(d.profile);
+      setFonts(d.fonts);
+      setSeo(d.seo);
+      setBranding(d.branding);
+      setTheme(d.theme);
+    } catch {
+      setLoadError("Data panel gagal dimuat. Periksa koneksi lalu coba lagi.");
+    }
   }
 
   useEffect(() => {
-    // loadData() memulai dengan await fetch; setState-nya terjadi di callback
-    // async, bukan sinkron di badan effect.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (authed) loadData();
+    if (!authed) return;
+    const t = setTimeout(() => void loadData(), 0);
+    return () => clearTimeout(t);
   }, [authed]);
 
-  function flash(msg: string) {
-    setNotice(msg);
-    setTimeout(() => setNotice(""), 2500);
+  function flash(msg: string, ok = true) {
+    setNotice({ msg, ok });
+    setTimeout(() => setNotice(null), 2600);
   }
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
+  async function doLogin(password: string) {
     setBusy(true);
     setLoginError("");
     const r = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pin }),
+      body: JSON.stringify({ password }),
     });
     setBusy(false);
-    if (r.ok) setAuthed(true);
-    else {
+    if (r.ok) {
+      setAuthed(true);
+    } else {
       const d = await r.json().catch(() => ({}));
       setLoginError(d.error || "PIN salah");
       setPin("");
     }
   }
+
+  function pushDigit(d: string) {
+    setPin((p) => (p.length < 6 ? p + d : p));
+  }
+
+  // PIN 4 digit langsung masuk tanpa pencet tombol.
+  useEffect(() => {
+    if (authed || pin.length !== 4 || busy) return;
+    const t = setTimeout(() => void doLogin(pin), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -124,13 +155,14 @@ export default function AdminPanel() {
   async function saveProfile() {
     if (!profile) return;
     setSaveBusy(true);
-    await fetch("/api/admin/profile", {
+    const r = await fetch("/api/admin/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profile),
     });
     setSaveBusy(false);
-    flash("Profil disimpan ✓");
+    if (r.ok) flash("Profil disimpan");
+    else flash("Gagal menyimpan profil", false);
   }
 
   async function saveSettings(patch: Partial<Store>) {
@@ -142,12 +174,13 @@ export default function AdminPanel() {
     if (r.ok) {
       const d = await r.json();
       setStore(d);
-      if (patch.social) setSocial(d.social);
       if (patch.seo) setSeo(d.seo);
       if (patch.fonts) setFonts(d.fonts);
       if (patch.branding) setBranding(d.branding);
       if (patch.theme) setTheme(d.theme);
-      flash("Tersimpan ✓");
+      flash("Tersimpan");
+    } else {
+      flash("Gagal menyimpan pengaturan", false);
     }
   }
 
@@ -166,7 +199,9 @@ export default function AdminPanel() {
       setStore({ ...store!, links: [...store!.links, item] });
       setLinkForm({ title: "", url: "", icon: "link", gate: "rules", kind: "link" });
       setEditing(false);
-      flash("Link ditambahkan ✓");
+      flash("Link ditambahkan");
+    } else {
+      flash("Gagal menambah link", false);
     }
     setSaveBusy(false);
   }
@@ -180,6 +215,8 @@ export default function AdminPanel() {
     if (r.ok) {
       const updated = await r.json();
       setStore({ ...store!, links: store!.links.map((l) => (l.id === id ? updated : l)) });
+    } else {
+      flash("Gagal mengubah link", false);
     }
   }
 
@@ -187,6 +224,7 @@ export default function AdminPanel() {
     if (!confirm("Hapus link ini?")) return;
     const r = await fetch(`/api/admin/links/${id}`, { method: "DELETE" });
     if (r.ok) setStore({ ...store!, links: store!.links.filter((l) => l.id !== id) });
+    else flash("Gagal menghapus link", false);
   }
 
   async function move(id: string, dir: -1 | 1) {
@@ -210,9 +248,9 @@ export default function AdminPanel() {
     fd.set("file", file);
     fd.set("folder", folder);
     const r = await fetch("/api/upload", { method: "POST", body: fd });
-    const d = await r.json();
+    const d = await r.json().catch(() => ({}));
     if (!r.ok) {
-      alert(d.error || "Upload gagal");
+      flash(d.error || "Upload gagal", false);
       return null;
     }
     return d.url;
@@ -220,8 +258,8 @@ export default function AdminPanel() {
 
   if (authed === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+        <Spinner />
       </div>
     );
   }
@@ -231,12 +269,15 @@ export default function AdminPanel() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4">
         <form
-          onSubmit={handleLogin}
-          className="w-full max-w-[340px] rounded-3xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-md"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pin.length >= 4) void doLogin(pin);
+          }}
+          className="relative w-full max-w-[340px] rounded-3xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-md"
         >
           <div className="mb-6 flex flex-col items-center text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
-              <Icon name="link" className="h-7 w-7" />
+              <Icon name="lock" className="h-7 w-7" />
             </div>
             <h1 className="mt-4 text-xl font-bold text-white">Panel Admin</h1>
             <p className="mt-1 text-sm text-white/50">Masukkan PIN untuk masuk</p>
@@ -253,7 +294,12 @@ export default function AdminPanel() {
               />
             ))}
           </div>
-          {loginError && <p className="mb-3 text-center text-sm text-rose-400">{loginError}</p>}
+          {loginError && (
+            <p className="mb-3 flex items-center justify-center gap-2 text-center text-sm text-rose-400">
+              <Icon name="alert" className="h-4 w-4" />
+              {loginError}
+            </p>
+          )}
 
           {/* numeric keypad */}
           <div className="grid grid-cols-3 gap-2.5">
@@ -261,7 +307,7 @@ export default function AdminPanel() {
               <button
                 key={n}
                 type="button"
-                onClick={() => pin.length < 4 && setPin(pin + n)}
+                onClick={() => pushDigit(n)}
                 className="rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-xl font-semibold text-white transition hover:bg-white/[0.08] active:scale-95"
               >
                 {n}
@@ -270,38 +316,66 @@ export default function AdminPanel() {
             <div />
             <button
               type="button"
-              onClick={() => setPin(pin + "0")}
+              onClick={() => pushDigit("0")}
               className="rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-xl font-semibold text-white transition hover:bg-white/[0.08] active:scale-95"
             >
               0
             </button>
             <button
               type="button"
-              onClick={() => setPin(pin.slice(0, -1))}
-              className="rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-white/60 transition hover:bg-white/[0.08] active:scale-95"
-              aria-label="hapus"
+              onClick={() => setPin((p) => p.slice(0, -1))}
+              className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-white/60 transition hover:bg-white/[0.08] active:scale-95"
+              aria-label="Hapus digit"
             >
-              ⌫
+              <Icon name="delete" className="h-5 w-5" />
             </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={busy || pin.length < 4}
-            className="mt-5 w-full rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-500 py-3 font-semibold text-white transition hover:from-violet-400 hover:to-fuchsia-400 disabled:opacity-40"
-          >
-            {busy ? "Memuat…" : "Masuk"}
-          </button>
+          {busy && (
+            <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50">
+              <Spinner small /> Memverifikasi…
+            </p>
+          )}
+
+          {/* tombol masuk kecil di pojok kanan bawah (fallback PIN > 4 digit) */}
+          <div className="mt-5 flex justify-end">
+            <button
+              type="submit"
+              disabled={busy || pin.length < 4}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:text-white disabled:opacity-30"
+            >
+              Masuk
+            </button>
+          </div>
           <p className="mt-4 text-center text-xs text-white/25">Akses dibatasi · pemilik saja</p>
         </form>
       </main>
     );
   }
 
+  if (loadError && !store) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4">
+        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-400">
+            <Icon name="alert" className="h-7 w-7" />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold">Panel gagal dimuat</h1>
+          <p className="mt-2 text-sm text-white/50">{loadError}</p>
+          <button onClick={() => void loadData()} className={btnCls + " mt-5"}>
+            <span className="flex items-center gap-2">
+              <Icon name="refresh" className="h-4 w-4" /> Coba lagi
+            </span>
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (!store) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+        <Spinner />
       </div>
     );
   }
@@ -321,9 +395,9 @@ export default function AdminPanel() {
             <a
               href="/"
               target="_blank"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
             >
-              Lihat halaman ↗
+              Lihat halaman <Icon name="external" className="h-3.5 w-3.5" />
             </a>
             <button
               onClick={handleLogout}
@@ -336,43 +410,43 @@ export default function AdminPanel() {
       </header>
 
       {notice && (
-        <div className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-300 backdrop-blur">
-          {notice}
+        <div
+          className={`fixed bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-sm backdrop-blur ${
+            notice.ok
+              ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
+              : "border-rose-400/30 bg-rose-500/15 text-rose-300"
+          }`}
+        >
+          <Icon name={notice.ok ? "link" : "alert"} className="h-4 w-4" />
+          {notice.msg}
         </div>
       )}
 
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-        {/* THEME toggle */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-semibold text-white">Theme</h2>
-              <p className="text-sm text-white/45">Pilih warna tema halaman</p>
-            </div>
-            <div className="flex rounded-xl border border-white/10 p-1">
-              <button
-                onClick={() => saveSettings({ theme: "dark" })}
-                className={`rounded-lg px-4 py-1.5 text-sm transition ${
-                  theme === "dark" ? "bg-white/10 text-white" : "text-white/40"
-                }`}
-              >
-                🌙 Dark
-              </button>
-              <button
-                onClick={() => saveSettings({ theme: "light" })}
-                className={`rounded-lg px-4 py-1.5 text-sm transition ${
-                  theme === "light" ? "bg-white/10 text-white" : "text-white/40"
-                }`}
-              >
-                ☀️ Light
-              </button>
-            </div>
+        {/* THEME */}
+        <Section title="Theme" sub="Pilih warna tema halaman publik">
+          <div className="flex rounded-xl border border-white/10 p-1">
+            <button
+              onClick={() => saveSettings({ theme: "dark" })}
+              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm transition ${
+                theme === "dark" ? "bg-white/10 text-white" : "text-white/40"
+              }`}
+            >
+              <Icon name="moon" className="h-4 w-4" /> Dark
+            </button>
+            <button
+              onClick={() => saveSettings({ theme: "light" })}
+              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm transition ${
+                theme === "light" ? "bg-white/10 text-white" : "text-white/40"
+              }`}
+            >
+              <Icon name="sun" className="h-4 w-4" /> Light
+            </button>
           </div>
-        </section>
+        </Section>
 
         {/* PROFILE */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="mb-4 font-semibold text-white">Profil</h2>
+        <Section title="Profil" sub="Identitas halaman bio">
           {profile && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -387,11 +461,57 @@ export default function AdminPanel() {
                 <textarea className={inputCls + " resize-none"} rows={2} value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
               </Field>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <ImageField label="Avatar (upload)" value={profile.avatar} onChange={(v) => setProfile({ ...profile, avatar: v })} onUpload={upload} folder="bio-link/avatar" />
+                <ImageField label="Avatar" value={profile.avatar} onChange={(v) => setProfile({ ...profile, avatar: v })} onUpload={upload} folder="bio-link/avatar" />
                 <ImageField label="Banner" value={profile.banner} onChange={(v) => setProfile({ ...profile, banner: v })} onUpload={upload} folder="bio-link/banner" />
               </div>
+
+              {/* posisi crop foto avatar */}
+              {profile.avatar && (
+                <Field label="Posisi foto avatar" hint="Bagian foto mana yang ditampilkan di lingkaran avatar">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {AVATAR_POSITIONS.map((p) => (
+                        <button
+                          key={p.key}
+                          type="button"
+                          title={p.label}
+                          onClick={() => setProfile({ ...profile, avatarPos: p.key })}
+                          className={`h-8 w-8 rounded-lg border transition ${
+                            (profile.avatarPos || "50% 50%") === p.key
+                              ? "border-violet-400/70 bg-violet-500/25"
+                              : "border-white/10 bg-white/5 hover:border-white/30"
+                          }`}
+                        >
+                          <span
+                            className="block h-2 w-2 rounded-full bg-white/80 mx-auto"
+                            style={{
+                              transform: `translate(${p.key.startsWith("0%") ? "-8px" : p.key.startsWith("100%") ? "8px" : 0}px, ${p.key.endsWith("0%") ? "-8px" : p.key.endsWith("100%") ? "8px" : 0}px)`,
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    {/* preview live */}
+                    <div className="flex items-center gap-3">
+                      <div className={`shape-${profile.shape} h-16 w-16 overflow-hidden border border-white/10`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={optImg(profile.avatar, { w: 200, h: 200, crop: "fill" })}
+                          alt="Preview avatar"
+                          className="h-full w-full object-cover"
+                          style={{ objectPosition: profile.avatarPos || "50% 50%" }}
+                        />
+                      </div>
+                      <p className="text-xs text-white/40">
+                        {AVATAR_POSITIONS.find((p) => p.key === (profile.avatarPos || "50% 50%"))?.label || "Custom"}
+                      </p>
+                    </div>
+                  </div>
+                </Field>
+              )}
+
               <Field label="Bentuk avatar">
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
                   {SHAPES.map((s) => (
                     <button
                       key={s.key}
@@ -404,15 +524,13 @@ export default function AdminPanel() {
                           : "border-white/10 bg-white/5 hover:border-white/30"
                       }`}
                     >
-                      {/* actual shape preview */}
-                      <span
-                        className={`block h-7 w-7 bg-gradient-to-br from-violet-400 to-fuchsia-500 shape-${s.key}`}
-                      />
+                      <span className={`block h-7 w-7 overflow-hidden bg-gradient-to-br from-violet-400 to-fuchsia-500 shape-${s.key}`} />
                       <span className="text-[10px] text-white/60">{s.label}</span>
                     </button>
                   ))}
                 </div>
               </Field>
+
               <Field label="Warna aksen">
                 <div className="flex flex-wrap gap-2">
                   {ACCENTS.map((c) => (
@@ -424,67 +542,57 @@ export default function AdminPanel() {
                     className="h-9 w-9 cursor-pointer rounded-full border border-white/10 bg-transparent" title="Custom" />
                 </div>
               </Field>
-              <button onClick={saveProfile} disabled={saveBusy} className={btnCls}>{saveBusy ? "…" : "Simpan Profil"}</button>
+              <button onClick={saveProfile} disabled={saveBusy} className={btnCls}>
+                {saveBusy ? "Menyimpan…" : "Simpan Profil"}
+              </button>
             </div>
           )}
-        </section>
-
-        {/* SOCIAL */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="mb-4 font-semibold text-white">Sosial Media</h2>
-          {social && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {SOCIAL_KEYS.map((k) => (
-                  <Field key={k} label={kLabel(k)}>
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/60">
-                        <Icon name={k} className="h-4 w-4" />
-                      </span>
-                      <input className={inputCls} value={social[k] || ""} placeholder="https://…"
-                        onChange={(e) => setSocial({ ...social, [k]: e.target.value })} />
-                    </div>
-                  </Field>
-                ))}
-              </div>
-              <button onClick={() => saveSettings({ social })} className={btnCls}>Simpan Sosmed</button>
-            </div>
-          )}
-        </section>
+        </Section>
 
         {/* LINKS */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-white">Link</h2>
-            <span className="text-sm text-white/40">{store.links.length} link</span>
-          </div>
-
-          <div className="space-y-2">
-            {store.links.map((l, i) => (
-              <div key={l.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/70">
-                  <Icon name={l.icon} className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`truncate font-medium text-white ${!l.enabled ? "line-through opacity-50" : ""}`}>{l.title}</p>
-                  <p className="truncate text-xs text-white/40">
-                    {l.url}
-                    {l.kind && l.kind !== "link" && <span className="ml-1 text-[10px] uppercase text-violet-300"> · {l.kind}</span>}
-                    {l.gate === "rules" && <span className="ml-1 text-[10px] uppercase text-amber-300"> · gate</span>}
-                  </p>
+        <Section title="Link" sub="Daftar tombol di halaman bio" right={<span className="text-sm text-white/40">{store.links.length} link</span>}>
+          {store.links.length === 0 && !editing ? (
+            <EmptyState
+              icon="inbox"
+              title="Belum ada link"
+              sub="Tambahkan link pertama biar halaman tidak kosong."
+              actionLabel="Tambah Link"
+              onAction={() => setEditing(true)}
+            />
+          ) : (
+            <div className="space-y-2">
+              {store.links.map((l, i) => (
+                <div key={l.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/70">
+                    <Icon name={l.icon} className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate font-medium text-white ${!l.enabled ? "line-through opacity-50" : ""}`}>{l.title}</p>
+                    <p className="truncate text-xs text-white/40">
+                      {l.url}
+                      {l.kind && l.kind !== "link" && <span className="ml-1 text-[10px] uppercase text-violet-300">· {l.kind}</span>}
+                      {l.gate === "rules" && (
+                        <span className="ml-1 inline-flex items-center gap-1 text-[10px] uppercase text-amber-300">
+                          · <Icon name="lock" className="h-3 w-3" /> gate
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <IconBtn onClick={() => move(l.id, -1)} disabled={i === 0} title="Naik"><MoveUpIcon /></IconBtn>
+                  <IconBtn onClick={() => move(l.id, 1)} disabled={i === store.links.length - 1} title="Turun"><MoveDownIcon /></IconBtn>
+                  <IconBtn onClick={() => updateLink(l.id, { enabled: !l.enabled })} title={l.enabled ? "Sembunyikan" : "Tampilkan"} color={l.enabled ? "text-emerald-400" : "text-white/30"}><EyeIcon /></IconBtn>
+                  <IconBtn onClick={() => deleteLink(l.id)} title="Hapus" color="text-rose-400/70"><TrashIcon /></IconBtn>
                 </div>
-                <IconBtn onClick={() => move(l.id, -1)} disabled={i === 0} title="Naik"><MoveUpIcon /></IconBtn>
-                <IconBtn onClick={() => move(l.id, 1)} disabled={i === store.links.length - 1} title="Turun"><MoveDownIcon /></IconBtn>
-                <IconBtn onClick={() => updateLink(l.id, { enabled: !l.enabled })} title="Toggle" color={l.enabled ? "text-emerald-400" : "text-white/30"}><EyeIcon /></IconBtn>
-                <IconBtn onClick={() => deleteLink(l.id)} title="Hapus" color="text-rose-400/70"><TrashIcon /></IconBtn>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {!editing ? (
-            <button onClick={() => setEditing(true)} className="mt-4 w-full rounded-2xl border border-dashed border-white/15 py-3 font-medium text-white/60 transition hover:border-white/30 hover:text-white">
-              + Tambah Link
-            </button>
+            store.links.length > 0 && (
+              <button onClick={() => setEditing(true)} className="mt-4 w-full rounded-2xl border border-dashed border-white/15 py-3 font-medium text-white/60 transition hover:border-white/30 hover:text-white">
+                + Tambah Link
+              </button>
+            )
           ) : (
             <form onSubmit={addLink} className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -497,17 +605,25 @@ export default function AdminPanel() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Tipe">
-                  <select className={inputCls} value={linkForm.kind} onChange={(e) => setLinkForm({ ...linkForm, kind: e.target.value as "link" | "join_group" | "channel" })}>
-                    <option value="link">Link biasa</option>
-                    <option value="join_group">Join Grup</option>
-                    <option value="channel">Link Saluran</option>
-                  </select>
+                  <Dropdown
+                    value={linkForm.kind}
+                    onChange={(v) => setLinkForm({ ...linkForm, kind: v as typeof linkForm.kind })}
+                    options={[
+                      { value: "link", label: "Link biasa" },
+                      { value: "join_group", label: "Join Grup" },
+                      { value: "channel", label: "Link Saluran" },
+                    ]}
+                  />
                 </Field>
                 <Field label="Gate (wajib baca rules)">
-                  <select className={inputCls} value={linkForm.gate} onChange={(e) => setLinkForm({ ...linkForm, gate: e.target.value as "rules" | "none" })}>
-                    <option value="rules">Aktifkan gate</option>
-                    <option value="none">Tanpa gate</option>
-                  </select>
+                  <Dropdown
+                    value={linkForm.gate}
+                    onChange={(v) => setLinkForm({ ...linkForm, gate: v as typeof linkForm.gate })}
+                    options={[
+                      { value: "rules", label: "Aktifkan gate" },
+                      { value: "none", label: "Tanpa gate" },
+                    ]}
+                  />
                 </Field>
               </div>
               <Field label="Ikon">
@@ -522,49 +638,45 @@ export default function AdminPanel() {
                 </div>
               </Field>
               <div className="flex gap-2">
-                <button type="submit" disabled={saveBusy} className={btnCls}>{saveBusy ? "…" : "Simpan"}</button>
+                <button type="submit" disabled={saveBusy} className={btnCls}>{saveBusy ? "Menyimpan…" : "Simpan"}</button>
                 <button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-medium text-white/60 transition hover:text-white">Batal</button>
               </div>
             </form>
           )}
-        </section>
+        </Section>
 
         {/* FONTS */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="mb-4 font-semibold text-white">Gaya Font</h2>
+        <Section title="Gaya Font" sub="Font tiap elemen teks di halaman">
           {fonts && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {FONT_TARGETS.map((t) => (
-                <Field key={t.key} label={t.label}>
-                  {/* select with per-option font-style preview */}
-                  <select
-                    className={inputCls}
-                    value={fonts[t.key]}
-                    onChange={(e) => setFonts({ ...fonts, [t.key]: e.target.value })}
-                  >
-                    {FONT_KEYS.map((k) => (
-                      <option key={k} value={k} style={{ fontFamily: fontCss(k) }}>
-                        {FONTS[k]?.label ?? k}
-                      </option>
-                    ))}
-                  </select>
-                  {/* live preview of the chosen font */}
-                  <div
-                    className="mt-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-2xl font-bold text-white"
-                    style={{ fontFamily: fontCss(fonts[t.key]) }}
-                  >
-                    Aa Bb Cc 123
-                  </div>
-                </Field>
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {FONT_TARGETS.map((t) => (
+                  <Field key={t.key} label={t.label}>
+                    <Dropdown
+                      value={fonts[t.key]}
+                      onChange={(v) => setFonts({ ...fonts, [t.key]: v })}
+                      options={FONT_KEYS.map((k) => ({
+                        value: k,
+                        label: FONTS[k]?.label ?? k,
+                        style: { fontFamily: fontCss(k) },
+                      }))}
+                    />
+                    <div
+                      className="mt-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-2xl font-bold text-white"
+                      style={{ fontFamily: fontCss(fonts[t.key]) }}
+                    >
+                      Aa Bb Cc 123
+                    </div>
+                  </Field>
+                ))}
+              </div>
+              <button onClick={() => saveSettings({ fonts })} className={btnCls + " mt-4"}>Simpan Font</button>
+            </>
           )}
-          {fonts && <button onClick={() => saveSettings({ fonts })} className={btnCls + " mt-4"}>Simpan Font</button>}
-        </section>
+        </Section>
 
         {/* SEO */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="mb-4 font-semibold text-white">SEO & OpenGraph</h2>
+        <Section title="SEO & OpenGraph" sub="Judul tab, deskripsi, favicon, banner share">
           {seo && (
             <div className="space-y-4">
               <Field label="Judul halaman (tab)"><input className={inputCls} value={seo.title} onChange={(e) => setSeo({ ...seo, title: e.target.value })} /></Field>
@@ -573,15 +685,16 @@ export default function AdminPanel() {
                 <ImageField label="Favicon" value={seo.favicon} onChange={(v) => setSeo({ ...seo, favicon: v })} onUpload={upload} folder="bio-link/favicon" />
                 <ImageField label="OG Banner" value={seo.ogImage} onChange={(v) => setSeo({ ...seo, ogImage: v })} onUpload={upload} folder="bio-link/og" />
               </div>
-              <Field label="URL Rules (untuk gate)"><input className={inputCls} value={seo.rulesUrl} onChange={(e) => setSeo({ ...seo, rulesUrl: e.target.value })} /></Field>
+              <Field label="URL Rules (untuk gate)" hint="Biarkan default https://rules.xyc.my.id/ agar gate menampilkan halaman aturan">
+                <input className={inputCls} value={seo.rulesUrl} onChange={(e) => setSeo({ ...seo, rulesUrl: e.target.value })} />
+              </Field>
               <button onClick={() => saveSettings({ seo })} className={btnCls}>Simpan SEO</button>
             </div>
           )}
-        </section>
+        </Section>
 
         {/* BRANDING */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-          <h2 className="mb-4 font-semibold text-white">Branding</h2>
+        <Section title="Branding" sub="Kredit di footer halaman">
           {branding && (
             <div className="space-y-3">
               <label className="flex items-center gap-3 text-sm text-white/70">
@@ -594,26 +707,141 @@ export default function AdminPanel() {
               <button onClick={() => saveSettings({ branding })} className={btnCls}>Simpan Branding</button>
             </div>
           )}
-        </section>
+        </Section>
       </div>
     </main>
   );
 }
+
+/* ================= UI primitives ================= */
 
 const inputCls =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-white placeholder-white/30 outline-none transition focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/20";
 const btnCls =
   "rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 font-semibold text-white transition enabled:hover:from-violet-400 enabled:hover:to-fuchsia-400 disabled:opacity-60";
 
-function kLabel(k: string) {
-  return k[0].toUpperCase() + k.slice(1);
+function Spinner({ small }: { small?: boolean }) {
+  return (
+    <span
+      className={`inline-block animate-spin rounded-full border-2 border-white/20 border-t-white ${
+        small ? "h-4 w-4" : "h-8 w-8"
+      }`}
+      aria-label="Memuat"
+    />
+  );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ title, sub, right, children }: {
+  title: string; sub?: string; right?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-white">{title}</h2>
+          {sub && <p className="text-sm text-white/45">{sub}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="text-xs font-medium uppercase tracking-wider text-white/40">{label}</label>
+      {hint && <p className="mt-0.5 text-xs text-white/30">{hint}</p>}
       <div className="mt-1.5">{children}</div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, sub, actionLabel, onAction }: {
+  icon: string; title: string; sub: string; actionLabel: string; onAction: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-white/15 px-6 py-10 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-white/40">
+        <Icon name={icon} className="h-6 w-6" />
+      </span>
+      <p className="mt-3 font-medium text-white/80">{title}</p>
+      <p className="mt-1 max-w-xs text-sm text-white/40">{sub}</p>
+      <button onClick={onAction} className={btnCls + " mt-4"}>{actionLabel}</button>
+    </div>
+  );
+}
+
+/* Dropdown kustom — pengganti <select> native biar konsisten sama tema. */
+function Dropdown({ value, options, onChange }: {
+  value: string;
+  options: { value: string; label: string; style?: React.CSSProperties }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={inputCls + " flex items-center justify-between gap-2 text-left"}
+      >
+        <span style={current?.style}>{current?.label ?? value}</span>
+        <Icon name="chevron" className={`h-4 w-4 shrink-0 text-white/40 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-20 mt-1.5 max-h-56 w-full overflow-auto rounded-xl border border-white/10 bg-[#15151d] p-1 shadow-2xl"
+        >
+          {options.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                  o.value === value ? "bg-violet-500/20 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
+                }`}
+                style={o.style}
+              >
+                {o.label}
+                {o.value === value && (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 text-violet-300" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m5 13 4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -626,6 +854,7 @@ function IconBtn({ children, onClick, disabled, title, color = "text-white/40" }
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={title}
       className={`rounded-lg p-1.5 transition hover:bg-white/10 hover:text-white disabled:opacity-20 ${color}`}
     >
       {children}
@@ -655,16 +884,17 @@ function ImageField({ label, value, onChange, onUpload, folder }: {
       <div className="flex items-center gap-2">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt={label} className="h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover" />
+          <img src={optImg(value, { w: 120, h: 120, crop: "fill" })} alt={label} className="h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover" />
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/30">
-            <Icon name="link" className="h-4 w-4" />
+            <Icon name="image" className="h-4 w-4" />
           </div>
         )}
         <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://… atau upload" />
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm transition hover:border-white/25 hover:text-white disabled:opacity-50">
-          {uploading ? "↻" : "Upload"}
+          className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm transition hover:border-white/25 hover:text-white disabled:opacity-50">
+          {uploading ? <Spinner small /> : <Icon name="image" className="h-4 w-4" />}
+          {uploading ? "Mengupload…" : "Upload"}
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       </div>

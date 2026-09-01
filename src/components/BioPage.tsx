@@ -1,41 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
-import type { LinkItem, Store, Socials, FontsConfig } from "@/lib/data";
+import { optImg } from "@/lib/img";
+import type { LinkItem, Store } from "@/lib/data";
 
 type PublicData = {
   profile: Store["profile"];
   links: LinkItem[];
-  social: Socials;
-  fonts: FontsConfig;
+  social: Store["social"];
+  fonts: Store["fonts"];
   theme: "dark" | "light";
   branding: Store["branding"];
   rulesUrl: string;
 };
-
-function hexToRgb(hex: string) {
-  const h = (hex || "#8b5cf6").replace("#", "");
-  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = parseInt(v, 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-const SOCIAL_KEYS: (keyof Socials)[] = [
-  "instagram",
-  "tiktok",
-  "youtube",
-  "github",
-  "x",
-  "facebook",
-  "linkedin",
-  "telegram",
-  "whatsapp",
-  "spotify",
-  "discord",
-  "website",
-];
 
 type XycGateApi = {
   open: (href: string, target?: string) => Promise<boolean>;
@@ -68,14 +47,65 @@ function toPublic(s: Store): PublicData {
   };
 }
 
+function hexToRgb(hex: string) {
+  const h = (hex || "#8b5cf6").replace("#", "");
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(v, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
 export default function BioPage({ initial }: { initial: Store | null }) {
-  const [data, setData] = useState<PublicData | null>(() => (initial ? toPublic(initial) : null));
+  const [data, setData] = useState<PublicData | null>(() =>
+    initial ? toPublic(initial) : null
+  );
   const [loading, setLoading] = useState(!initial);
+  const [failed, setFailed] = useState(false);
   const [gateLink, setGateLink] = useState<LinkItem | null>(null);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
   const pressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // long-press the avatar to show a centered round photo with blurred backdrop
+  // Semua setState di sini terjadi di callback promise (asinkron), sehingga
+  // aman terhadap aturan react-hooks/set-state-in-effect (Next 16).
+  const load = useCallback(() => {
+    fetch("/api/data")
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((d: PublicData) => {
+        setData(d);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // retry manual dari ErrorState: reset boleh sinkron karena ini event handler
+  const retry = useCallback(() => {
+    setLoading(true);
+    setFailed(false);
+    load();
+  }, [load]);
+
+  // Muat widget gate resmi (gate.js) sekali saja. Widget menarik kebijakan asli
+  // lewat API (CORS terbuka) dan merender di Shadow DOM — BUKAN iframe, karena
+  // origin rules mengirim X-Frame-Options: SAMEORIGIN.
+  const rulesOrigin = rulesOriginOf(data?.rulesUrl);
+  useEffect(() => {
+    if (getXycGate()) return;
+    if (document.getElementById("xyc-gate-script")) return;
+    const s = document.createElement("script");
+    s.id = "xyc-gate-script";
+    s.src = `${rulesOrigin}/gate.js`;
+    s.defer = true;
+    s.async = true;
+    document.head.appendChild(s);
+  }, [rulesOrigin]);
+
   function avatarPressStart() {
     pressRef.current = setTimeout(() => setShowAvatarPreview(true), 450);
   }
@@ -85,26 +115,26 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     setShowAvatarPreview(false);
   }
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/data")
-      .then((r) => r.json())
-      .then((d: PublicData) => {
-        if (alive) setData(d);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  function handleClick(e: React.MouseEvent, link: LinkItem) {
+    if (link.gate !== "rules") return;
+    e.preventDefault();
+    const XG = getXycGate();
+    if (XG && typeof XG.open === "function") {
+      try {
+        XG.open(link.url, "_blank");
+        return;
+      } catch {
+        // jatuh ke fallback modal
+      }
+    }
+    setGateLink(link);
+  }
 
   const profile = data?.profile;
   const accent = profile?.accent || "#8b5cf6";
   const rgb = useMemo(() => hexToRgb(accent), [accent]);
   const isLight = data?.theme === "light";
+  const avatarPos = profile?.avatarPos || "50% 50%";
 
   const cssVars = useMemo(
     () =>
@@ -120,48 +150,6 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       }) as React.CSSProperties,
     [accent, rgb, data?.fonts]
   );
-
-  // Muat widget gate resmi (gate.js) dari origin rules sekali saja.
-  // Widget ini menarik kebijakan asli lewat API (CORS terbuka) dan merender
-  // di Shadow DOM — BUKAN iframe, karena rules.xyc.my.id mengirim
-  // X-Frame-Options: SAMEORIGIN sehingga iframe diblokir browser dan
-  // aturannya tidak pernah terlihat (bug modal lama).
-  const rulesOrigin = rulesOriginOf(data?.rulesUrl);
-
-  useEffect(() => {
-    if (getXycGate()) return;
-    if (document.getElementById("xyc-gate-script")) return;
-    const s = document.createElement("script");
-    s.id = "xyc-gate-script";
-    s.src = `${rulesOrigin}/gate.js`;
-    s.defer = true;
-    s.async = true;
-    document.head.appendChild(s);
-  }, [rulesOrigin]);
-
-  // gate opener: for links marked gate==="rules", intercept click.
-  function handleClick(e: React.MouseEvent, link: LinkItem) {
-    if (link.gate !== "rules") return;
-    e.preventDefault();
-    const XG = getXycGate();
-    if (XG && typeof XG.open === "function") {
-      // Widget resmi: orang wajib scroll sampai bawah & pencet Setuju,
-      // baru link dibuka; persetujuan diingat (default 30 hari).
-      try {
-        XG.open(link.url, "_blank");
-        return;
-      } catch {
-        // jatuh ke fallback modal di bawah
-      }
-    }
-    // gate.js gagal dimuat (offline/origin down): fallback modal lokal.
-    setGateLink(link);
-  }
-
-  const socialButtons = SOCIAL_KEYS.map((k) => ({
-    k,
-    href: data?.social?.[k] || "",
-  })).filter((s) => s.href);
 
   return (
     <main
@@ -190,68 +178,77 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       )}
 
       {loading ? (
-        <div
-          className="mt-24 flex flex-col items-center gap-4 animate-pulse"
-          style={{ fontFamily: "var(--font-name)" }}
-        >
-          <div className="h-24 w-24 rounded-full bg-white/10" />
-          <div className="h-5 w-40 rounded bg-white/10" />
-          <div className="mt-5 w-full max-w-sm space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-12 rounded-2xl bg-white/5" />
-            ))}
-          </div>
-        </div>
+        <Skeleton isLight={!!isLight} />
+      ) : failed && !data ? (
+        <ErrorState onRetry={retry} />
       ) : (
         <div className="flex w-full max-w-md flex-col items-center">
-          {/* banner */}
-          {profile?.banner ? (
-            <div className="mb-4 w-full overflow-hidden rounded-3xl border border-black/5 shadow-2xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={profile.banner} alt="banner" className="h-32 w-full object-cover" />
-            </div>
-          ) : null}
+          {/* banner + avatar rapat: avatar menimpa banner seperti kartu profil */}
+          <div className="relative w-full">
+            {profile?.banner ? (
+              <div className="w-full overflow-hidden rounded-3xl border border-black/5 shadow-2xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={optImg(profile.banner, { w: 900, h: 300, crop: "fill" })}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-28 w-full object-cover"
+                />
+              </div>
+            ) : null}
 
-          {/* avatar (dynamic shape) */}
-          <div
-            className={`avatar-frame flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${profile?.shape || "circle"} cursor-pointer select-none`}
-            style={{
-              background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})`,
-              width: 118,
-              height: 118,
-            }}
-            onPointerDown={avatarPressStart}
-            onPointerUp={avatarPressEnd}
-            onPointerLeave={avatarPressEnd}
-            onPointerCancel={avatarPressEnd}
-            onContextMenu={(e) => e.preventDefault()}
-            onDragStart={(e) => e.preventDefault()}
-          >
             <div
-              className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${
-                isLight ? "bg-white" : "bg-[#111118]"
-              }`}
+              className={`avatar-frame absolute left-1/2 -translate-x-1/2 flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${
+                profile?.shape || "circle"
+              } cursor-pointer select-none ${profile?.banner ? "-bottom-10" : "relative"}`}
+              style={{
+                background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})`,
+                width: 108,
+                height: 108,
+              }}
+              onPointerDown={avatarPressStart}
+              onPointerUp={avatarPressEnd}
+              onPointerLeave={avatarPressEnd}
+              onPointerCancel={avatarPressEnd}
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
             >
-              {profile?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar} alt={profile.name} className="h-full w-full object-cover" />
-              ) : (
-                <div
-                  className="flex h-full w-full items-center justify-center text-4xl font-bold"
-                  style={{
-                    fontFamily: "var(--font-name)",
-                    background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
-                    color: "#fff",
-                  }}
-                >
-                  {(profile?.name || "?").charAt(0).toUpperCase()}
-                </div>
-              )}
+              <div
+                className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${
+                  isLight ? "bg-white" : "bg-[#111118]"
+                }`}
+              >
+                {profile?.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
+                    alt={profile.name}
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                    style={{ objectPosition: avatarPos }}
+                  />
+                ) : (
+                  <div
+                    className="flex h-full w-full items-center justify-center text-4xl font-bold"
+                    style={{
+                      fontFamily: "var(--font-name)",
+                      background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
+                      color: "#fff",
+                    }}
+                  >
+                    {(profile?.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* name */}
-          <h1 className="mt-4 text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-name)" }}>
+          <h1
+            className="text-2xl font-bold tracking-tight"
+            style={{ fontFamily: "var(--font-name)", marginTop: profile?.banner ? 52 : 16 }}
+          >
             {profile?.name}
           </h1>
           <p className="mt-0.5 text-sm opacity-50" style={{ fontFamily: "var(--font-handle)" }}>
@@ -264,28 +261,6 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             >
               {profile.bio}
             </p>
-          )}
-
-          {/* social quick buttons */}
-          {socialButtons.length > 0 && (
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {socialButtons.slice(0, 8).map((s) => (
-                <a
-                  key={s.k}
-                  href={s.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={s.k}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl border opacity-70 transition hover:-translate-y-0.5 hover:opacity-100 ${
-                    isLight
-                      ? "border-black/10 bg-white text-zinc-700 hover:shadow-lg"
-                      : "border-white/10 bg-white/5 text-white/80 hover:shadow-lg"
-                  }`}
-                >
-                  <Icon name={s.k} className="h-4 w-4" />
-                </a>
-              ))}
-            </div>
           )}
 
           {data && data.links.length > 0 && (
@@ -329,16 +304,35 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                       )}
                     </span>
                     {gated ? (
-                      <span className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[10px] uppercase tracking-wide opacity-70">
-                        {isLight ? "Gates" : "🔒"}
+                      <span
+                        className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wide ${
+                          isLight ? "border-black/10 text-black/50" : "border-white/10 text-white/50"
+                        }`}
+                      >
+                        <Icon name="lock" className="h-3 w-3" />
+                        Gate
                       </span>
                     ) : null}
-                    <span className={`transition group-hover:translate-x-0.5 ${isLight ? "text-zinc-400" : "text-white/30 group-hover:text-white/70"}`}>
-                      →
+                    <span
+                      className={`transition group-hover:translate-x-0.5 ${
+                        isLight ? "text-zinc-400" : "text-white/30 group-hover:text-white/70"
+                      }`}
+                    >
+                      <Icon name="chevron" className="h-4 w-4 -rotate-90" />
                     </span>
                   </a>
                 );
               })}
+            </div>
+          )}
+
+          {data && data.links.length === 0 && (
+            <div
+              className={`mt-8 w-full rounded-3xl border border-dashed p-8 text-center text-sm ${
+                isLight ? "border-black/15 text-black/50" : "border-white/15 text-white/40"
+              }`}
+            >
+              Belum ada link yang ditampilkan.
             </div>
           )}
 
@@ -351,11 +345,11 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 className="text-xs font-medium tracking-wide opacity-30 transition hover:opacity-70"
                 style={{ fontFamily: "var(--font-brand)" }}
               >
-                ⚡ {data.branding.text || "Made by XySpace Tch"}
+                {data.branding.text || "Made by XySpace Tch"}
               </a>
             ) : (
               <span className="text-xs opacity-30" style={{ fontFamily: "var(--font-brand)" }}>
-                © {new Date().getFullYear()} {profile?.name}
+                {new Date().getFullYear()} {profile?.name}
               </span>
             )}
           </footer>
@@ -365,14 +359,14 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       {/* AVATAR LONG-PRESS PREVIEW */}
       {showAvatarPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center transition-opacity">
-          {/* blurred backdrop from the avatar image */}
           {profile?.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={profile.avatar}
+              src={optImg(profile.avatar, { w: 800, h: 800, crop: "fill" })}
               alt=""
               aria-hidden
               className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-60"
+              style={{ objectPosition: avatarPos }}
             />
           ) : (
             <div
@@ -382,19 +376,19 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           )}
           <div className="absolute inset-0 bg-black/40" />
 
-          {/* centered round photo */}
           <div className="relative z-10">
             <div
               className="h-72 w-72 overflow-hidden rounded-full p-1 shadow-2xl"
               style={{ background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})` }}
             >
-              <div className={`h-full w-full overflow-hidden rounded-full bg-black/40`}>
+              <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
                 {profile?.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={profile.avatar}
+                    src={optImg(profile.avatar, { w: 600, h: 600, crop: "fill" })}
                     alt={profile.name}
                     className="h-full w-full object-cover"
+                    style={{ objectPosition: avatarPos }}
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
@@ -413,7 +407,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
         </div>
       )}
 
-      {/* GATE MODAL */}
+      {/* GATE FALLBACK (hanya bila gate.js gagal dimuat) */}
       {gateLink && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
@@ -425,12 +419,9 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* simple top bar (default, minimal) */}
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <span
-                className="text-sm font-semibold"
-                style={{ fontFamily: "var(--font-link)" }}
-              >
+              <span className="flex items-center gap-2 text-sm font-semibold" style={{ fontFamily: "var(--font-link)" }}>
+                <Icon name="lock" className="h-4 w-4" />
                 {gateLink.title} · Rules
               </span>
               <button
@@ -438,18 +429,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-white/70 hover:text-white"
                 aria-label="Tutup"
               >
-                ✕
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            {/* Fallback: widget gate.js tidak berhasil dimuat (offline/origin down).
-                Jangan pakai iframe — rules.xyc.my.id mengirim X-Frame-Options:
-                SAMEORIGIN sehingga embed akan diblokir dan terlihat kosong. */}
-            <div className="px-4 py-6 text-sm opacity-80" style={{ minHeight: 180 }}>
-              <p className="mb-2 font-semibold">Widget kebijakan nggak bisa dimuat.</p>
+            <div className="px-5 py-6 text-sm opacity-80" style={{ minHeight: 140 }}>
+              <p className="mb-2 font-semibold">Widget kebijakan tidak bisa dimuat.</p>
               <p className="leading-relaxed opacity-70">
-                Sepertinya koneksi ke {rulesOrigin.replace(/^https?:\/\//, "")} lagi
-                bermasalah. Baca dulu aturannya di tab baru sebelum gabung, ya.
+                Koneksi ke {rulesOrigin.replace(/^https?:\/\//, "")} sedang bermasalah.
+                Baca dulu aturannya di tab baru sebelum bergabung.
               </p>
             </div>
 
@@ -458,9 +448,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 href={rulesOrigin}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 rounded-xl border border-white/15 py-2.5 text-sm font-medium opacity-90 transition hover:opacity-100"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 py-2.5 text-sm font-medium opacity-90 transition hover:opacity-100"
               >
-                ⧉ Baca rules
+                <Icon name="external" className="h-4 w-4" />
+                Baca rules
               </a>
               <button
                 onClick={() => {
@@ -470,12 +461,54 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
               >
-                {gateLink.kind === "join_group" ? "Join Grup →" : "Buka Saluran →"}
+                {gateLink.kind === "join_group" ? "Join Grup" : "Buka Saluran"}
               </button>
             </div>
           </div>
         </div>
       )}
     </main>
+  );
+}
+
+/* ---------------- Skeleton: bentuk halaman final, tanpa konten palsu ---------------- */
+function Skeleton({ isLight }: { isLight: boolean }) {
+  const box = isLight ? "bg-black/10" : "bg-white/10";
+  return (
+    <div className="mt-2 flex w-full max-w-md animate-pulse flex-col items-center" aria-busy="true" aria-label="Memuat halaman">
+      <div className={`h-28 w-full rounded-3xl ${box}`} />
+      <div className={`-mt-10 h-[108px] w-[108px] rounded-full border-4 ${isLight ? "border-[#f7f7f9]" : "border-[#08080d]"} ${box}`} />
+      <div className={`mt-4 h-6 w-40 rounded-lg ${box}`} />
+      <div className={`mt-2 h-4 w-24 rounded-lg ${box}`} />
+      <div className={`mt-4 h-4 w-64 rounded-lg ${box}`} />
+      <div className="mt-7 w-full space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`h-[62px] w-full rounded-2xl ${box}`} />
+        ))}
+      </div>
+      <div className={`mt-10 h-3 w-32 rounded ${box}`} />
+    </div>
+  );
+}
+
+/* ---------------- Error state dengan retry ---------------- */
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="mt-24 flex w-full max-w-sm flex-col items-center rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-400">
+        <Icon name="alert" className="h-7 w-7" />
+      </span>
+      <h2 className="mt-4 text-lg font-semibold">Halaman gagal dimuat</h2>
+      <p className="mt-2 text-sm leading-relaxed text-white/50">
+        Koneksi terputus atau server sedang bermasalah. Coba muat ulang sebentar lagi.
+      </p>
+      <button
+        onClick={onRetry}
+        className="mt-5 flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold transition hover:brightness-110"
+      >
+        <Icon name="refresh" className="h-4 w-4" />
+        Coba lagi
+      </button>
+    </div>
   );
 }

@@ -64,6 +64,33 @@ body {
   border-radius: 58% 42% 55% 45% / 55% 46% 54% 45%;
 }
 
+/* Morphing blob: border-radius berubah pelan, hidup tapi nggak berisik */
+.shape-morph {
+  animation: shape-morph 9s ease-in-out infinite;
+}
+@keyframes shape-morph {
+  0%, 100% { border-radius: 58% 42% 55% 45% / 55% 46% 54% 45%; }
+  25%      { border-radius: 45% 55% 48% 52% / 52% 58% 42% 48%; }
+  50%      { border-radius: 52% 48% 60% 40% / 45% 50% 50% 55%; }
+  75%      { border-radius: 40% 60% 45% 55% / 58% 42% 58% 42%; }
+}
+
+/* Abstract: bentuk organik miring dengan sudut campuran */
+.shape-abstract {
+  border-radius: 62% 38% 46% 54% / 48% 62% 38% 52%;
+  transform: rotate(-6deg) scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shape-morph {
+    animation: none;
+    border-radius: 58% 42% 55% 45% / 55% 46% 54% 45%;
+  }
+  .shape-abstract {
+    transform: none;
+  }
+}
+
 /* long-press avatar: no native context menu / text selection / drag */
 .avatar-frame {
   -webkit-touch-callout: none;
