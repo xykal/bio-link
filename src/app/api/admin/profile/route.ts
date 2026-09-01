@@ -13,6 +13,7 @@ export async function PATCH(req: Request) {
   if (typeof body.handle === "string") store.profile.handle = body.handle.trim();
   if (typeof body.bio === "string") store.profile.bio = body.bio.trim();
   if (typeof body.avatar === "string") store.profile.avatar = body.avatar.trim();
+  if (typeof body.banner === "string") store.profile.banner = body.banner.trim();
   if (typeof body.accent === "string") store.profile.accent = body.accent.trim();
 
   await writeStore(store);

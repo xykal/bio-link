@@ -3,12 +3,8 @@ import { cookies } from "next/headers";
 const SESSION_COOKIE = "bio_admin_session";
 const SESSION_VALUE = "authenticated";
 
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-
-// Hashed (obscured) path for the admin panel. Change via ADMIN_SECRET_PATH env.
-// The UI never links to it — you reach it only by knowing the exact URL.
-export const ADMIN_SECRET_PATH =
-  (process.env.ADMIN_SECRET_PATH || "af4ec7529f2d7353").replace(/^\/+|\/+$/g, "");
+// Password for the admin panel (numeric PIN, default 0099 — override via env).
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "0099";
 
 export async function isAuthenticated(): Promise<boolean> {
   try {

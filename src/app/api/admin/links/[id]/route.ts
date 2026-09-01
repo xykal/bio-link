@@ -21,6 +21,8 @@ export async function PATCH(
   if (typeof body.url === "string") link.url = body.url.trim();
   if (typeof body.icon === "string") link.icon = body.icon;
   if (typeof body.enabled === "boolean") link.enabled = body.enabled;
+  if (body.gate === "rules" || body.gate === "none") link.gate = body.gate;
+  if (["link", "join_group", "channel"].includes(body.kind)) link.kind = body.kind;
 
   await writeStore(store);
   return NextResponse.json(link);
@@ -35,9 +37,7 @@ export async function DELETE(
   }
   const { id } = await params;
   const store = await readStore();
-  store.links = store.links.filter((l) => l.id !== id);
-  // re-normalize order
-  store.links = store.links.map((l, i) => ({ ...l, order: i }));
+  store.links = store.links.filter((l) => l.id !== id).map((l, i) => ({ ...l, order: i }));
   await writeStore(store);
   return NextResponse.json({ ok: true });
 }

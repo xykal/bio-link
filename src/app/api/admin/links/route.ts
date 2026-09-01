@@ -16,7 +16,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Judul & URL wajib diisi" }, { status: 400 });
   }
 
-  const icon = (body.icon || "link") as string;
   const nextOrder =
     store.links.length > 0 ? Math.max(...store.links.map((l) => l.order)) + 1 : 0;
 
@@ -24,9 +23,11 @@ export async function POST(req: Request) {
     id: randomUUID(),
     title,
     url,
-    icon,
+    icon: body.icon || "link",
     order: nextOrder,
     enabled: true,
+    gate: body.gate === "rules" ? "rules" : "none",
+    kind: (body.kind as LinkItem["kind"]) || "link",
   };
   store.links.push(item);
   await writeStore(store);

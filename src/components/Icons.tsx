@@ -14,6 +14,10 @@ export const ICON_KEYS = [
   "email",
   "discord",
   "twitch",
+  "facebook",
+  "group",
+  "channel",
+  "phone",
 ] as const;
 
 export type IconKey = (typeof ICON_KEYS)[number];
@@ -34,6 +38,10 @@ const paths: Record<IconKey, React.ReactNode> = {
   email: <><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></>,
   discord: <path d="M15 5c3 0 6 2 6 4v8c0 2-3 4-6 4M9 5c-3 0-6 2-6 4v8c0 2 3 4 5 4M9 5v3M15 5v3M3 17V9h4M21 17V9h-4"/>,
   twitch: <path d="M21 2H3v16h5v4l4-4h5l4-4V2zM11 11V7M16 11V7"/>,
+  facebook: <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>,
+  group: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+  channel: <path d="M2 16l4 0 3-6 4 10 3-6 2 2 4 0M2 8h2M4 20h2"/>,
+  phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>,
 };
 
 export function Icon({
