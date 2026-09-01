@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import type { LinkItem, Store, Socials, FontsConfig } from "@/lib/data";
@@ -41,6 +41,18 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const [data, setData] = useState<PublicData | null>(null);
   const [loading, setLoading] = useState(!initial);
   const [gateLink, setGateLink] = useState<LinkItem | null>(null);
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false);
+  const pressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // long-press the avatar to show a centered round photo with blurred backdrop
+  function avatarPressStart() {
+    pressRef.current = setTimeout(() => setShowAvatarPreview(true), 450);
+  }
+  function avatarPressEnd() {
+    if (pressRef.current) clearTimeout(pressRef.current);
+    pressRef.current = null;
+    setShowAvatarPreview(false);
+  }
 
   useEffect(() => {
     if (initial) {
@@ -153,12 +165,16 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
           {/* avatar (dynamic shape) */}
           <div
-            className={`avatar-frame flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${profile?.shape || "circle"}`}
+            className={`avatar-frame flex items-center justify-center bg-gradient-to-br p-[3px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] shape-${profile?.shape || "circle"} cursor-pointer select-none`}
             style={{
               background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})`,
               width: 118,
               height: 118,
             }}
+            onPointerDown={avatarPressStart}
+            onPointerUp={avatarPressEnd}
+            onPointerLeave={avatarPressEnd}
+            onPointerCancel={avatarPressEnd}
           >
             <div
               className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${
@@ -295,6 +311,57 @@ export default function BioPage({ initial }: { initial: Store | null }) {
         </div>
       )}
 
+      {/* AVATAR LONG-PRESS PREVIEW */}
+      {showAvatarPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center transition-opacity">
+          {/* blurred backdrop from the avatar image */}
+          {profile?.avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profile.avatar}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-60"
+            />
+          ) : (
+            <div
+              className="absolute inset-0 opacity-60 blur-2xl"
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
+            />
+          )}
+          <div className="absolute inset-0 bg-black/40" />
+
+          {/* centered round photo */}
+          <div className="relative z-10">
+            <div
+              className="h-72 w-72 overflow-hidden rounded-full p-1 shadow-2xl"
+              style={{ background: `conic-gradient(from 180deg, ${accent}, ${accent}55, ${accent})` }}
+            >
+              <div className={`h-full w-full overflow-hidden rounded-full bg-black/40`}>
+                {profile?.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatar}
+                    alt={profile.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
+                    {(profile?.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            </div>
+            <p
+              className="mt-3 text-center text-sm font-semibold text-white/90"
+              style={{ fontFamily: "var(--font-name)" }}
+            >
+              {profile?.name}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* GATE MODAL */}
       {gateLink && (
         <div
@@ -302,63 +369,57 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           onClick={() => setGateLink(null)}
         >
           <div
-            className={`relative w-full max-w-sm rounded-3xl border p-6 text-center ${
-              isLight ? "border-black/5 bg-white shadow-2xl" : "border-white/10 bg-[#13131b]"
+            className={`relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border text-center ${
+              isLight ? "border-black/10 bg-white shadow-2xl" : "border-white/10 bg-[#13131b]"
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-white"
-              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}
-            >
-              <Icon name={gateLink.icon} className="h-7 w-7" />
+            {/* simple top bar (default, minimal) */}
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <span
+                className="text-sm font-semibold"
+                style={{ fontFamily: "var(--font-link)" }}
+              >
+                {gateLink.title} · Rules
+              </span>
+              <button
+                onClick={() => setGateLink(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-white/70 hover:text-white"
+                aria-label="Tutup"
+              >
+                ✕
+              </button>
             </div>
-            <h2 className="mt-4 text-lg font-bold" style={{ fontFamily: "var(--font-link)" }}>
-              {gateLink.title}
-            </h2>
-            <p className="mt-1 text-xs uppercase tracking-wider opacity-45" style={{ fontFamily: "var(--font-label)" }}>
-              Baca rules dulu sebelum lanjut
-            </p>
 
-            {/* embed the REAL rules page (rules.xyc.my.id/docs) */}
-            <div
-              className={`mt-3 overflow-hidden rounded-2xl border ${isLight ? "border-black/10" : "border-white/10"} bg-black/20`}
-              style={{ height: 220 }}
-            >
+            {/* the actual rules page, default appearance */}
+            <div className="bg-black/10" style={{ height: "min(60vh, 460px)" }}>
               <iframe
                 src={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
                 title="Rules"
                 className="h-full w-full"
                 loading="lazy"
-                sandbox="allow-same-origin allow-scripts allow-popups"
                 style={{ border: 0, background: "#fff" }}
               />
             </div>
 
-            <div className="mt-4 space-y-2.5">
+            <div className="flex items-center gap-2 border-t border-white/10 px-3 py-3">
               <a
                 href={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
                 target="_blank"
                 rel="noreferrer"
-                className="block w-full rounded-xl border border-white/15 py-3 text-sm font-semibold opacity-80 transition hover:opacity-100"
+                className="flex-1 rounded-xl border border-white/15 py-2.5 text-sm font-medium opacity-90 transition hover:opacity-100"
               >
-                📖 Buka Rules di tab baru
+                ⧉ Di tab baru
               </a>
               <button
                 onClick={() => {
                   window.open(gateLink.url, "_blank", "noopener,noreferrer");
                   setGateLink(null);
                 }}
-                className="w-full rounded-xl py-3 text-sm font-semibold text-white transition hover:brightness-110"
+                className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
               >
                 {gateLink.kind === "join_group" ? "Join Grup →" : "Buka Saluran →"}
-              </button>
-              <button
-                onClick={() => setGateLink(null)}
-                className="w-full rounded-xl py-2 text-xs text-white/40 transition hover:text-white/70"
-              >
-                Batal
               </button>
             </div>
           </div>

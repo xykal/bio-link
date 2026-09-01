@@ -59,18 +59,9 @@ body {
     4% 32%, 12% 18%, 27% 13%, 40% 18%
   );
 }
-/* Animated blob (morphing) */
+/* Static organic blob (no animation) */
 .shape-blob {
-  animation: blobmorph 12s ease-in-out infinite, blobRotate 24s linear infinite;
-}
-@keyframes blobmorph {
-  0%, 100% { border-radius: 60% 40% 55% 45% / 55% 45% 60% 40%; }
-  25% { border-radius: 45% 55% 40% 60% / 60% 40% 55% 45%; }
-  50% { border-radius: 55% 45% 60% 40% / 40% 60% 45% 55%; }
-  75% { border-radius: 40% 60% 45% 55% / 55% 60% 40% 45%; }
-}
-@keyframes blobRotate {
-  to { transform: rotate(360deg) scale(1.03); }
+  border-radius: 58% 42% 55% 45% / 55% 46% 54% 45%;
 }
 
 /* scrollbar */
