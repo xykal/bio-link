@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -43,3 +44,6 @@ next-env.d.ts
 # local data store
 data/
 .env*
+
+# keep the example env tracked
+!.env.example
