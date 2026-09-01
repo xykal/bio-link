@@ -175,7 +175,18 @@ function normalize(parsed: Partial<Store>): Store {
   return {
     profile: { ...d.profile, ...(parsed.profile || {}) },
     links: Array.isArray(parsed.links)
-      ? parsed.links.map((l) => ({ ...d.links[0] ?? {}, ...l }))
+      ? parsed.links.map((l) => ({
+          id: l.id || randomUUID(),
+          title: l.title ?? "",
+          url: l.url ?? "",
+          icon: l.icon || "link",
+          order: typeof l.order === "number" ? l.order : 0,
+          enabled: l.enabled !== false,
+          gate: l.gate === "rules" ? "rules" : l.gate === "none" ? "none" : "none",
+          kind: ["link", "join_group", "channel"].includes(l.kind as any)
+            ? (l.kind as any)
+            : "link",
+        }))
       : [...d.links],
     social: { ...d.social, ...(parsed.social || {}) },
     fonts: { ...d.fonts, ...(parsed.fonts || {}) },
