@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon, ICON_KEYS } from "@/components/Icons";
 import { FONT_KEYS, FONTS, fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
+import { STACK_OPTIONS, getTechIcon } from "@/lib/stackIcons";
 import type {
   Store,
   LinkItem,
@@ -12,21 +13,49 @@ import type {
   SeoConfig,
   Branding,
   ProfileShape,
+  StackItem,
+  Member,
+  LinkShape,
 } from "@/lib/data";
 
 const SHAPES: { key: ProfileShape; label: string }[] = [
   { key: "circle", label: "Circle" },
   { key: "squircle", label: "Squircle" },
   { key: "rounded", label: "Rounded" },
+  { key: "octagon", label: "Octagon" },
+  { key: "shield", label: "Shield" },
+  { key: "diamond", label: "Diamond" },
+  { key: "hexagon", label: "Hexagon" },
+  { key: "leaf", label: "Leaf" },
   { key: "blob", label: "Blob" },
   { key: "morph", label: "Morphing" },
   { key: "abstract", label: "Abstract" },
-  { key: "hexagon", label: "Hexagon" },
   { key: "star", label: "Star" },
   { key: "heart", label: "Heart" },
 ];
 
 const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
+
+// Preset tema warna siap pakai (set aksen + mode)
+const THEME_PRESETS: { id: string; name: string; accent: string; mode: "dark" | "light" }[] = [
+  { id: "violet", name: "Violet", accent: "#8b5cf6", mode: "dark" },
+  { id: "ocean", name: "Ocean", accent: "#0ea5e9", mode: "dark" },
+  { id: "emerald", name: "Emerald", accent: "#10b981", mode: "dark" },
+  { id: "sunset", name: "Sunset", accent: "#f97316", mode: "dark" },
+  { id: "rose", name: "Rose", accent: "#f43f5e", mode: "dark" },
+  { id: "gold", name: "Gold", accent: "#f59e0b", mode: "dark" },
+  { id: "cyber", name: "Cyber", accent: "#22d3ee", mode: "dark" },
+  { id: "graphite", name: "Graphite", accent: "#71717a", mode: "dark" },
+  { id: "daylight", name: "Daylight", accent: "#6366f1", mode: "light" },
+  { id: "paper", name: "Paper", accent: "#0f172a", mode: "light" },
+];
+
+const LINK_SHAPES: { key: LinkShape; label: string }[] = [
+  { key: "pill", label: "Pill" },
+  { key: "rounded", label: "Rounded" },
+  { key: "soft", label: "Soft" },
+  { key: "square", label: "Square" },
+];
 
 const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "name", label: "Nama" },
@@ -35,19 +64,6 @@ const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "linkTitle", label: "Judul Link" },
   { key: "linkLabel", label: "Label" },
   { key: "brand", label: "Branding" },
-];
-
-// Posisi crop foto avatar (object-position) — picker 3x3 di panel.
-const AVATAR_POSITIONS: { key: string; label: string }[] = [
-  { key: "0% 0%", label: "Kiri atas" },
-  { key: "50% 0%", label: "Atas" },
-  { key: "100% 0%", label: "Kanan atas" },
-  { key: "0% 50%", label: "Kiri" },
-  { key: "50% 50%", label: "Tengah" },
-  { key: "100% 50%", label: "Kanan" },
-  { key: "0% 100%", label: "Kiri bawah" },
-  { key: "50% 100%", label: "Bawah" },
-  { key: "100% 100%", label: "Kanan bawah" },
 ];
 
 const SOCIAL_PLATFORMS: { key: keyof Socials; label: string; icon: string }[] = [
@@ -78,6 +94,9 @@ export default function AdminPanel() {
   // drafts
   const [profile, setProfile] = useState<Store["profile"] | null>(null);
   const [social, setSocial] = useState<Socials | null>(null);
+  const [stack, setStack] = useState<StackItem[]>([]);
+  const [team, setTeam] = useState<Member[]>([]);
+  const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
   const [seo, setSeo] = useState<SeoConfig | null>(null);
   const [branding, setBranding] = useState<Branding | null>(null);
@@ -114,6 +133,9 @@ export default function AdminPanel() {
       setStore(d);
       setProfile(d.profile);
       setSocial(d.social);
+      setStack(d.stack || []);
+      setTeam(d.team || []);
+      setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
       setSeo(d.seo);
       setBranding(d.branding);
@@ -183,6 +205,22 @@ export default function AdminPanel() {
     else flash("Gagal menyimpan profil", false);
   }
 
+  // Preset tema: ubah aksen (profil) + mode (settings) sekaligus.
+  async function applyThemePreset(p: (typeof THEME_PRESETS)[number]) {
+    if (!profile) return;
+    const nextProfile = { ...profile, accent: p.accent };
+    setProfile(nextProfile);
+    setTheme(p.mode);
+    setSaveBusy(true);
+    await fetch("/api/admin/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextProfile),
+    });
+    await saveSettings({ theme: p.mode });
+    setSaveBusy(false);
+  }
+
   async function saveSettings(patch: Partial<Store>) {
     const r = await fetch("/api/admin/settings", {
       method: "PATCH",
@@ -193,6 +231,9 @@ export default function AdminPanel() {
       const d = await r.json();
       setStore(d);
       if (patch.social) setSocial(d.social);
+      if (patch.stack) setStack(d.stack);
+      if (patch.team) setTeam(d.team);
+      if (patch.linkShape) setLinkShape(d.linkShape);
       if (patch.seo) setSeo(d.seo);
       if (patch.fonts) setFonts(d.fonts);
       if (patch.branding) setBranding(d.branding);
@@ -259,6 +300,42 @@ export default function AdminPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: next.map((l) => l.id) }),
     });
+  }
+
+  // ---- stack helpers ----
+  function addStack(slug: string) {
+    if (stack.some((s) => s.slug === slug)) return;
+    setStack([...stack, { id: crypto.randomUUID(), slug }]);
+  }
+  function removeStack(id: string) {
+    setStack(stack.filter((s) => s.id !== id));
+  }
+  function moveStack(id: string, dir: -1 | 1) {
+    const idx = stack.findIndex((s) => s.id === id);
+    const t = idx + dir;
+    if (idx < 0 || t < 0 || t >= stack.length) return;
+    const next = [...stack];
+    [next[idx], next[t]] = [next[t], next[idx]];
+    setStack(next);
+  }
+
+  // ---- team helpers ----
+  function addTeam() {
+    setTeam([...team, { id: crypto.randomUUID(), name: "", role: "", avatar: "", url: "" }]);
+  }
+  function updateTeam(id: string, patch: Partial<Member>) {
+    setTeam(team.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }
+  function removeTeam(id: string) {
+    setTeam(team.filter((m) => m.id !== id));
+  }
+  function moveTeam(id: string, dir: -1 | 1) {
+    const idx = team.findIndex((m) => m.id === id);
+    const t = idx + dir;
+    if (idx < 0 || t < 0 || t >= team.length) return;
+    const next = [...team];
+    [next[idx], next[t]] = [next[t], next[idx]];
+    setTeam(next);
   }
 
   // ---- image upload helper ----
@@ -443,7 +520,7 @@ export default function AdminPanel() {
 
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
         {/* THEME */}
-        <Section title="Theme" sub="Pilih warna tema halaman publik">
+        <Section title="Theme" sub="Mode gelap/terang + preset warna siap pakai">
           <div className="flex rounded-xl border border-white/10 p-1">
             <button
               onClick={() => saveSettings({ theme: "dark" })}
@@ -462,6 +539,38 @@ export default function AdminPanel() {
               <Icon name="sun" className="h-4 w-4" /> Light
             </button>
           </div>
+
+          <p className="mt-4 text-xs font-medium uppercase tracking-wider text-white/40">
+            Preset tema
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {THEME_PRESETS.map((p) => {
+              const active = profile?.accent === p.accent && theme === p.mode;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyThemePreset(p)}
+                  className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition ${
+                    active
+                      ? "border-violet-400/70 bg-violet-500/15"
+                      : "border-white/10 bg-white/5 hover:border-white/30"
+                  }`}
+                >
+                  <span
+                    className="h-7 w-7 shrink-0 rounded-full ring-1 ring-white/20"
+                    style={{ background: p.accent }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-white">{p.name}</span>
+                    <span className="block text-[10px] uppercase tracking-wide text-white/40">
+                      {p.mode}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </Section>
 
         {/* PROFILE */}
@@ -479,55 +588,20 @@ export default function AdminPanel() {
               <Field label="Bio">
                 <textarea className={inputCls + " resize-none"} rows={2} value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
               </Field>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <ImageField label="Avatar" value={profile.avatar} onChange={(v) => setProfile({ ...profile, avatar: v })} onUpload={upload} folder="bio-link/avatar" />
-                <ImageField label="Banner" value={profile.banner} onChange={(v) => setProfile({ ...profile, banner: v })} onUpload={upload} folder="bio-link/banner" />
-              </div>
-
-              {/* posisi crop foto avatar */}
-              {profile.avatar && (
-                <Field label="Posisi foto avatar" hint="Bagian foto mana yang ditampilkan di lingkaran avatar">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {AVATAR_POSITIONS.map((p) => (
-                        <button
-                          key={p.key}
-                          type="button"
-                          title={p.label}
-                          onClick={() => setProfile({ ...profile, avatarPos: p.key })}
-                          className={`h-8 w-8 rounded-lg border transition ${
-                            (profile.avatarPos || "50% 50%") === p.key
-                              ? "border-violet-400/70 bg-violet-500/25"
-                              : "border-white/10 bg-white/5 hover:border-white/30"
-                          }`}
-                        >
-                          <span
-                            className="block h-2 w-2 rounded-full bg-white/80 mx-auto"
-                            style={{
-                              transform: `translate(${p.key.startsWith("0%") ? "-8px" : p.key.startsWith("100%") ? "8px" : 0}px, ${p.key.endsWith("0%") ? "-8px" : p.key.endsWith("100%") ? "8px" : 0}px)`,
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                    {/* preview live */}
-                    <div className="flex items-center gap-3">
-                      <div className={`shape-${profile.shape} h-16 w-16 overflow-hidden border border-white/10`}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={optImg(profile.avatar, { w: 200, h: 200, crop: "fill" })}
-                          alt="Preview avatar"
-                          className="h-full w-full object-cover"
-                          style={{ objectPosition: profile.avatarPos || "50% 50%" }}
-                        />
-                      </div>
-                      <p className="text-xs text-white/40">
-                        {AVATAR_POSITIONS.find((p) => p.key === (profile.avatarPos || "50% 50%"))?.label || "Custom"}
-                      </p>
-                    </div>
-                  </div>
-                </Field>
-              )}
+              <AvatarCropField
+                value={profile.avatar}
+                pos={profile.avatarPos || "50% 50%"}
+                onChange={(v) => setProfile({ ...profile, avatar: v })}
+                onPosChange={(p) => setProfile({ ...profile, avatarPos: p })}
+                onUpload={upload}
+              />
+              <ImageField
+                label="Banner"
+                value={profile.banner}
+                onChange={(v) => setProfile({ ...profile, banner: v })}
+                onUpload={upload}
+                folder="bio-link/banner"
+              />
 
               <Field label="Bentuk avatar">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
@@ -566,6 +640,33 @@ export default function AdminPanel() {
               </button>
             </div>
           )}
+        </Section>
+
+        {/* BENTUK TOMBOL LINK */}
+        <Section title="Bentuk Tombol Link" sub="Gaya sudut tombol link di halaman publik">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {LINK_SHAPES.map((s) => {
+              const radius = { pill: 9999, rounded: 16, soft: 24, square: 10 }[s.key];
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => saveSettings({ linkShape: s.key })}
+                  className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition ${
+                    linkShape === s.key
+                      ? "border-violet-400/70 bg-violet-500/15"
+                      : "border-white/10 bg-white/5 hover:border-white/30"
+                  }`}
+                >
+                  <span
+                    className="h-8 w-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70"
+                    style={{ borderRadius: radius }}
+                  />
+                  <span className="text-xs text-white/70">{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </Section>
 
         {/* LINKS */}
@@ -694,6 +795,158 @@ export default function AdminPanel() {
               </button>
             </>
           )}
+        </Section>
+
+        {/* STACK / KEAHLIAN */}
+        <Section
+          title="Stack / Keahlian"
+          sub="Logo teknologi asli yang tampil tumpuk-tindih di halaman. Pilih dari daftar."
+          right={<span className="text-sm text-white/40">{stack.length} dipilih</span>}
+        >
+          <div className="space-y-4">
+            {stack.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {stack.map((s, i) => {
+                  const ic = getTechIcon(s.slug);
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/20 py-1.5 pl-1.5 pr-0.5"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
+                        {ic ? (
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                            <path d={ic.path} fill={ic.hex} />
+                          </svg>
+                        ) : (
+                          <Icon name="link" className="h-3.5 w-3.5 text-black/50" />
+                        )}
+                      </span>
+                      <span className="text-xs text-white/70">{ic?.title || s.slug}</span>
+                      <IconBtn onClick={() => moveStack(s.id, -1)} disabled={i === 0} title="Geser kiri">
+                        <MoveLeftIcon />
+                      </IconBtn>
+                      <IconBtn
+                        onClick={() => moveStack(s.id, 1)}
+                        disabled={i === stack.length - 1}
+                        title="Geser kanan"
+                      >
+                        <MoveRightIcon />
+                      </IconBtn>
+                      <IconBtn onClick={() => removeStack(s.id)} title="Hapus" color="text-rose-400/70">
+                        <TrashIcon />
+                      </IconBtn>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-white/40">
+                Belum ada stack. Tambahkan dari daftar di bawah.
+              </p>
+            )}
+
+            <Field label="Tambah dari daftar">
+              <div className="flex flex-wrap gap-1.5">
+                {STACK_OPTIONS.map((o) => {
+                  const added = stack.some((s) => s.slug === o.slug);
+                  return (
+                    <button
+                      key={o.slug}
+                      type="button"
+                      disabled={added}
+                      onClick={() => addStack(o.slug)}
+                      title={added ? `${o.title} sudah dipilih` : `Tambah ${o.title}`}
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                        added
+                          ? "border-violet-400/50 bg-violet-500/20 opacity-50"
+                          : "border-white/10 bg-white hover:border-white/40"
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                        <path d={o.path} fill={o.hex} />
+                      </svg>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <button onClick={() => saveSettings({ stack })} className={btnCls}>
+              Simpan Stack
+            </button>
+          </div>
+        </Section>
+
+        {/* TEAM & CONTRIBUTOR */}
+        <Section
+          title="Team & Contributor"
+          sub="Avatar bulat sejajar yang tampil di bawah link."
+          right={
+            <button
+              onClick={addTeam}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+            >
+              + Tambah
+            </button>
+          }
+        >
+          <div className="space-y-3">
+            {team.length === 0 && (
+              <p className="text-sm text-white/40">Belum ada anggota. Klik “+ Tambah”.</p>
+            )}
+            {team.map((m, i) => (
+              <div key={m.id} className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="flex items-start gap-3">
+                  <MemberAvatar
+                    value={m.avatar}
+                    name={m.name}
+                    onChange={(v) => updateTeam(m.id, { avatar: v })}
+                    onUpload={upload}
+                  />
+                  <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      className={inputCls}
+                      placeholder="Nama"
+                      value={m.name}
+                      onChange={(e) => updateTeam(m.id, { name: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder="Role (mis. Founder)"
+                      value={m.role}
+                      onChange={(e) => updateTeam(m.id, { role: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    className={inputCls}
+                    placeholder="Link profil (opsional) https://…"
+                    value={m.url}
+                    onChange={(e) => updateTeam(m.id, { url: e.target.value })}
+                  />
+                  <IconBtn onClick={() => moveTeam(m.id, -1)} disabled={i === 0} title="Naik">
+                    <MoveUpIcon />
+                  </IconBtn>
+                  <IconBtn
+                    onClick={() => moveTeam(m.id, 1)}
+                    disabled={i === team.length - 1}
+                    title="Turun"
+                  >
+                    <MoveDownIcon />
+                  </IconBtn>
+                  <IconBtn onClick={() => removeTeam(m.id)} title="Hapus" color="text-rose-400/70">
+                    <TrashIcon />
+                  </IconBtn>
+                </div>
+              </div>
+            ))}
+            {team.length > 0 && (
+              <button onClick={() => saveSettings({ team })} className={btnCls}>
+                Simpan Team
+              </button>
+            )}
+          </div>
         </Section>
 
         {/* FONTS */}
@@ -953,6 +1206,166 @@ function ImageField({ label, value, onChange, onUpload, folder }: {
   );
 }
 
+/* Avatar + crop: upload/pilih foto lalu geser di dalam lingkaran untuk
+   menentukan bagian mana yang ditampilkan (object-position). */
+function AvatarCropField({ value, pos, onChange, onPosChange, onUpload }: {
+  value: string;
+  pos: string;
+  onChange: (v: string) => void;
+  onPosChange: (p: string) => void;
+  onUpload: (folder: string, file: File) => Promise<string | null>;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const circleRef = useRef<HTMLDivElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+  function posFromEvent(e: React.PointerEvent) {
+    const el = circleRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = clamp(((e.clientX - r.left) / r.width) * 100);
+    const y = clamp(((e.clientY - r.top) / r.height) * 100);
+    onPosChange(`${x}% ${y}%`);
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const url = await onUpload("bio-link/avatar", file);
+    setUploading(false);
+    if (url) onChange(url);
+    e.target.value = "";
+  }
+
+  return (
+    <Field
+      label="Foto Profil"
+      hint="Upload/pilih foto, lalu geser di dalam lingkaran untuk menyesuaikan bagian yang ditampilkan."
+    >
+      <div className="flex flex-wrap items-center gap-4">
+        <div
+          ref={circleRef}
+          onPointerDown={(e) => {
+            if (!value) return;
+            setDragging(true);
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+            posFromEvent(e);
+          }}
+          onPointerMove={(e) => {
+            if (dragging && value) posFromEvent(e);
+          }}
+          onPointerUp={() => setDragging(false)}
+          onPointerCancel={() => setDragging(false)}
+          className={`relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/5 ${
+            value ? "cursor-move touch-none" : ""
+          }`}
+        >
+          {value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={optImg(value, { w: 240, h: 240, crop: "fill" })}
+              alt="Preview foto profil"
+              draggable={false}
+              className="pointer-events-none h-full w-full object-cover"
+              style={{ objectPosition: pos }}
+            />
+          ) : (
+            <Icon name="image" className="h-6 w-6 text-white/30" />
+          )}
+        </div>
+        <div className="flex min-w-[220px] flex-1 flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              className={inputCls}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="https://… atau upload"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm transition hover:border-white/25 hover:text-white disabled:opacity-50"
+            >
+              {uploading ? <Spinner small /> : <Icon name="image" className="h-4 w-4" />}
+              {uploading ? "…" : "Upload"}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          </div>
+          {value && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-white/40">Posisi: {pos}</span>
+              <button
+                type="button"
+                onClick={() => onPosChange("50% 50%")}
+                className="text-xs text-violet-300 transition hover:underline"
+              >
+                Reset tengah
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Field>
+  );
+}
+
+/* Avatar bulat kecil untuk anggota team (upload cepat). */
+function MemberAvatar({ value, name, onChange, onUpload }: {
+  value: string;
+  name: string;
+  onChange: (v: string) => void;
+  onUpload: (folder: string, file: File) => Promise<string | null>;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const url = await onUpload("bio-link/team", file);
+    setUploading(false);
+    if (url) onChange(url);
+    e.target.value = "";
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        title="Upload foto anggota"
+        className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/5 text-white/40 transition hover:border-white/35"
+      >
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={optImg(value, { w: 120, h: 120, crop: "fill" })}
+            alt={name || "anggota"}
+            className="h-full w-full object-cover"
+          />
+        ) : uploading ? (
+          <Spinner small />
+        ) : (
+          <Icon name="image" className="h-5 w-5" />
+        )}
+      </button>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
+function MoveLeftIcon() {
+  return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5m4-4-4 4 4 4" /></svg>;
+}
+function MoveRightIcon() {
+  return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-4-4 4 4-4 4" /></svg>;
+}
 function MoveUpIcon() {
   return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5m-4 4 4-4 4 4" /></svg>;
 }

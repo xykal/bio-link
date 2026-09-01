@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { readStore, writeStore } from "@/lib/data";
 import { isAuthenticated } from "@/lib/auth";
 
@@ -18,7 +19,7 @@ export async function PATCH(req: Request) {
       .filter((s: { slug?: unknown }) => s && typeof s.slug === "string" && s.slug.trim())
       .slice(0, 40)
       .map((s: { id?: string; slug: string }) => ({
-        id: typeof s.id === "string" && s.id ? s.id : crypto.randomUUID(),
+        id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
         slug: s.slug.trim().slice(0, 40),
       }));
   }
@@ -27,7 +28,7 @@ export async function PATCH(req: Request) {
       .filter((m: { name?: unknown }) => m && typeof m.name === "string" && m.name.trim())
       .slice(0, 40)
       .map((m: { id?: string; name: string; role?: string; avatar?: string; url?: string }) => ({
-        id: typeof m.id === "string" && m.id ? m.id : crypto.randomUUID(),
+        id: typeof m.id === "string" && m.id ? m.id : randomUUID(),
         name: m.name.trim().slice(0, 60),
         role: typeof m.role === "string" ? m.role.slice(0, 60) : "",
         avatar: typeof m.avatar === "string" ? m.avatar.slice(0, 500) : "",
