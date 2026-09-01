@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://bio.haekal.web.id"),
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let fontsHref = "";
   try {
     const store = await readStore();

@@ -33,6 +33,12 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 - Masukkan PIN (default `0099` — ubah lewat env `ADMIN_PASSWORD`)
 - Input hanya angka, ala PIN/keypad → aman dari tebakan
 
+## 🔒 Keamanan sesi admin
+- Cookie sesi **ditandatangani HMAC** (`SESSION_SECRET`) + masa berlaku 7 hari — tidak bisa dipalsukan hanya dengan tahu nama cookie.
+- Perbandingan PIN **constant-time**, login di-rate-limit (10 percobaan / 10 menit / IP).
+- `/api/upload` wajib sesi admin, folder Cloudinary di-whitelist, gambar maks 4 MB.
+- Gate grup/saluran memakai widget resmi `gate.js` dari `rules.xyc.my.id` (Shadow DOM, wajib scroll & setuju). Modal lokal hanya fallback bila widget gagal dimuat — tidak pakai iframe karena origin rules mengirim `X-Frame-Options: SAMEORIGIN`.
+
 ## 📦 Setup
 
 ```bash
@@ -43,7 +49,8 @@ npm run dev
 ### Environment variables
 | Var | Keterangan |
 |---|---|
-| `ADMIN_PASSWORD` | PIN admin (default `0099`) |
+| `ADMIN_PASSWORD` | PIN admin (default `0099` — **ganti!** ) |
+| `SESSION_SECRET` | Rahasia tanda tangan cookie sesi (opsional, sangat disarankan) |
 | `CLOUDFLARE_ACCOUNT_ID` | ID akun Cloudflare |
 | `CLOUDFLARE_D1_DATABASE_ID` | ID database D1 |
 | `CLOUDFLARE_API_TOKEN` | API token Cloudflare (izin D1) |

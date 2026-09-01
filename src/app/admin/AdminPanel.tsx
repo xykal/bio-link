@@ -86,11 +86,13 @@ export default function AdminPanel() {
   }
 
   useEffect(() => {
+    // loadData() memulai dengan await fetch; setState-nya terjadi di callback
+    // async, bukan sinkron di badan effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (authed) loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
-  function flash(msg: string, ok = true) {
+  function flash(msg: string) {
     setNotice(msg);
     setTimeout(() => setNotice(""), 2500);
   }
@@ -495,14 +497,14 @@ export default function AdminPanel() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Tipe">
-                  <select className={inputCls} value={linkForm.kind} onChange={(e) => setLinkForm({ ...linkForm, kind: e.target.value as any })}>
+                  <select className={inputCls} value={linkForm.kind} onChange={(e) => setLinkForm({ ...linkForm, kind: e.target.value as "link" | "join_group" | "channel" })}>
                     <option value="link">Link biasa</option>
                     <option value="join_group">Join Grup</option>
                     <option value="channel">Link Saluran</option>
                   </select>
                 </Field>
                 <Field label="Gate (wajib baca rules)">
-                  <select className={inputCls} value={linkForm.gate} onChange={(e) => setLinkForm({ ...linkForm, gate: e.target.value as any })}>
+                  <select className={inputCls} value={linkForm.gate} onChange={(e) => setLinkForm({ ...linkForm, gate: e.target.value as "rules" | "none" })}>
                     <option value="rules">Aktifkan gate</option>
                     <option value="none">Tanpa gate</option>
                   </select>
@@ -542,7 +544,7 @@ export default function AdminPanel() {
                   >
                     {FONT_KEYS.map((k) => (
                       <option key={k} value={k} style={{ fontFamily: fontCss(k) }}>
-                        {(FONTS[k] as any).label}
+                        {FONTS[k]?.label ?? k}
                       </option>
                     ))}
                   </select>

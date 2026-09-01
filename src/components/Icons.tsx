@@ -24,14 +24,6 @@ export const ICON_KEYS = [
 
 export type IconKey = (typeof ICON_KEYS)[number];
 
-type SvgProps = { className?: string };
-
-const base = {
-  viewBox: "0 0 24 24",
-  fill: "currentColor",
-  "aria-hidden": true,
-} as const;
-
 // --- Brand / filled logos (Simple Icons official paths) ---
 const brandPaths: Record<string, string> = {
   instagram:

@@ -6,8 +6,22 @@ const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
 const API_KEY = process.env.CLOUDINARY_API_KEY || "";
 const API_SECRET = process.env.CLOUDINARY_API_SECRET || "";
 
+// Folder yang dipakai panel admin. Tanpa whitelist, siapa pun yang lolos auth
+// bisa menulis ke folder mana pun di akun Cloudinary.
+const ALLOWED_FOLDERS = new Set([
+  "bio-link/avatar",
+  "bio-link/banner",
+  "bio-link/favicon",
+  "bio-link/og",
+]);
+
+const MAX_BYTES = 4 * 1024 * 1024; // 4 MB — cukup buat avatar/banner/OG
+
 export async function POST(req: Request) {
-  if (!isAuthenticated()) {
+  // Bug sebelumnya: isAuthenticated() dipanggil TANPA await. Promise itu truthy,
+  // jadi `!isAuthenticated()` selalu false dan rute ini terbuka untuk siapa pun —
+  // terbukti di production: request tanpa cookie tetap lolos ke Cloudinary.
+  if (!(await isAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!CLOUD_NAME || !API_KEY || !API_SECRET) {
@@ -19,12 +33,24 @@ export async function POST(req: Request) {
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file") as File | null;
-  const folder = (form?.get("folder") as string) || "bio-link";
+  const folder = String(form?.get("folder") || "bio-link/avatar");
   if (!file) {
     return NextResponse.json({ error: "Tidak ada file" }, { status: 400 });
   }
+  if (!ALLOWED_FOLDERS.has(folder)) {
+    return NextResponse.json({ error: "Folder tidak diizinkan" }, { status: 400 });
+  }
+  if (file.type && !file.type.startsWith("image/")) {
+    return NextResponse.json({ error: "Harus berupa gambar" }, { status: 400 });
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json({ error: "Maksimal 4 MB" }, { status: 413 });
+  }
 
   const buf = Buffer.from(await file.arrayBuffer());
+  if (buf.length > MAX_BYTES) {
+    return NextResponse.json({ error: "Maksimal 4 MB" }, { status: 413 });
+  }
   const base64 = buf.toString("base64");
   const timestamp = Math.round(Date.now() / 1000);
 

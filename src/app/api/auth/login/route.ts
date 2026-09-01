@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
-import { ADMIN_PASSWORD, createSessionCookie } from "@/lib/auth";
+import {
+  verifyPin,
+  createSessionCookie,
+  rateLimited,
+  clientIp,
+} from "@/lib/auth";
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const password = (body.password || "") as string;
+  if (rateLimited(clientIp(req))) {
+    return NextResponse.json(
+      { ok: false, error: "Terlalu banyak percobaan. Tunggu sebentar lagi." },
+      { status: 429 }
+    );
+  }
 
-  if (password !== ADMIN_PASSWORD) {
+  const body = await req.json().catch(() => ({}));
+  const password = String(body.password ?? "");
+
+  if (!verifyPin(password)) {
     return NextResponse.json({ ok: false, error: "Password salah" }, { status: 401 });
   }
 

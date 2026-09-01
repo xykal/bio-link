@@ -175,7 +175,7 @@ const DEFAULT_STORE: Store = {
     description: "Semua link Haekal dalam satu halaman — bio.haekal.web.id",
     favicon: "",
     ogImage: "",
-    rulesUrl: "https://rules.xyc.my.id/docs",
+    rulesUrl: "https://rules.xyc.my.id/",
   },
   theme: "dark",
   branding: { enabled: true, text: "Made by XySpace Tch" },
@@ -194,8 +194,10 @@ function normalize(parsed: Partial<Store>): Store {
           order: typeof l.order === "number" ? l.order : 0,
           enabled: l.enabled !== false,
           gate: l.gate === "rules" ? "rules" : l.gate === "none" ? "none" : "none",
-          kind: ["link", "join_group", "channel"].includes(l.kind as any)
-            ? (l.kind as any)
+          kind: (["link", "join_group", "channel"] as NonNullable<LinkItem["kind"]>[]).includes(
+            l.kind as NonNullable<LinkItem["kind"]>
+          )
+            ? (l.kind as NonNullable<LinkItem["kind"]>)
             : "link",
         }))
       : [...d.links],
@@ -210,7 +212,8 @@ function normalize(parsed: Partial<Store>): Store {
 // ---------------------------------------------------------------------------
 //  Cloudflare D1
 // ---------------------------------------------------------------------------
-async function d1Query(sql: string): Promise<any> {
+type D1ResultSet = { results?: Array<Record<string, unknown>> };
+async function d1Query(sql: string): Promise<D1ResultSet[]> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/d1/database/${CF_DB}/query`;
   const res = await fetch(url, {
     method: "POST",
@@ -224,8 +227,8 @@ async function d1Query(sql: string): Promise<any> {
 
 async function d1Read(): Promise<Store> {
   const rows = await d1Query(`SELECT data FROM ${TABLE} WHERE id = ${ROW_ID}`);
-  const first = rows?.[0]?.results?.[0];
-  if (!first) {
+  const first = rows?.[0]?.results?.[0] as { data?: string } | undefined;
+  if (!first?.data) {
     const store = normalize({});
     await d1Write(store);
     return store;

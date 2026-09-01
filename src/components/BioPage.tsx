@@ -37,8 +37,39 @@ const SOCIAL_KEYS: (keyof Socials)[] = [
   "website",
 ];
 
+type XycGateApi = {
+  open: (href: string, target?: string) => Promise<boolean>;
+  agreed?: () => boolean;
+  reset?: () => void;
+};
+
+function getXycGate(): XycGateApi | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { XycGate?: XycGateApi }).XycGate;
+}
+
+function rulesOriginOf(url?: string): string {
+  try {
+    return new URL(url || "https://rules.xyc.my.id/").origin;
+  } catch {
+    return "https://rules.xyc.my.id";
+  }
+}
+
+function toPublic(s: Store): PublicData {
+  return {
+    profile: s.profile,
+    links: s.links.filter((l) => l.enabled).sort((a, b) => a.order - b.order),
+    social: s.social,
+    fonts: s.fonts,
+    theme: s.theme,
+    branding: s.branding,
+    rulesUrl: s.seo.rulesUrl,
+  };
+}
+
 export default function BioPage({ initial }: { initial: Store | null }) {
-  const [data, setData] = useState<PublicData | null>(null);
+  const [data, setData] = useState<PublicData | null>(() => (initial ? toPublic(initial) : null));
   const [loading, setLoading] = useState(!initial);
   const [gateLink, setGateLink] = useState<LinkItem | null>(null);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
@@ -55,27 +86,20 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   }
 
   useEffect(() => {
-    if (initial) {
-      setData({
-        profile: initial.profile,
-        links: initial.links.filter((l) => l.enabled).sort((a, b) => a.order - b.order),
-        social: initial.social,
-        fonts: initial.fonts,
-        theme: initial.theme,
-        branding: initial.branding,
-        rulesUrl: initial.seo.rulesUrl,
-      });
-      setLoading(false);
-    }
+    let alive = true;
     fetch("/api/data")
       .then((r) => r.json())
       .then((d: PublicData) => {
-        setData(d);
-        setLoading(false);
+        if (alive) setData(d);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [initial]);
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const profile = data?.profile;
   const accent = profile?.accent || "#8b5cf6";
@@ -97,22 +121,47 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     [accent, rgb, data?.fonts]
   );
 
+  // Muat widget gate resmi (gate.js) dari origin rules sekali saja.
+  // Widget ini menarik kebijakan asli lewat API (CORS terbuka) dan merender
+  // di Shadow DOM — BUKAN iframe, karena rules.xyc.my.id mengirim
+  // X-Frame-Options: SAMEORIGIN sehingga iframe diblokir browser dan
+  // aturannya tidak pernah terlihat (bug modal lama).
+  const rulesOrigin = rulesOriginOf(data?.rulesUrl);
+
+  useEffect(() => {
+    if (getXycGate()) return;
+    if (document.getElementById("xyc-gate-script")) return;
+    const s = document.createElement("script");
+    s.id = "xyc-gate-script";
+    s.src = `${rulesOrigin}/gate.js`;
+    s.defer = true;
+    s.async = true;
+    document.head.appendChild(s);
+  }, [rulesOrigin]);
+
   // gate opener: for links marked gate==="rules", intercept click.
-  function handleClick(e: React.MouseEvent, link: LinkItem, target: string) {
-    if (link.gate === "rules") {
-      e.preventDefault();
-      setGateLink(link);
+  function handleClick(e: React.MouseEvent, link: LinkItem) {
+    if (link.gate !== "rules") return;
+    e.preventDefault();
+    const XG = getXycGate();
+    if (XG && typeof XG.open === "function") {
+      // Widget resmi: orang wajib scroll sampai bawah & pencet Setuju,
+      // baru link dibuka; persetujuan diingat (default 30 hari).
+      try {
+        XG.open(link.url, "_blank");
+        return;
+      } catch {
+        // jatuh ke fallback modal di bawah
+      }
     }
+    // gate.js gagal dimuat (offline/origin down): fallback modal lokal.
+    setGateLink(link);
   }
 
   const socialButtons = SOCIAL_KEYS.map((k) => ({
     k,
     href: data?.social?.[k] || "",
   })).filter((s) => s.href);
-
-  const nicknameLinks = socialButtons.filter((s) =>
-    ["instagram", "tiktok", "youtube", "github", "x", "facebook", "linkedin", "telegram", "$spotify", "discord", "website"].includes(s.k)
-  );
 
   return (
     <main
@@ -249,7 +298,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     href={l.url}
                     target="_blank"
                     rel="noreferrer"
-                    onClick={(e) => handleClick(e, l, l.url)}
+                    onClick={(e) => handleClick(e, l)}
                     className={`group flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
                       isLight
                         ? "border-black/5 bg-white shadow-sm hover:shadow-lg"
@@ -393,25 +442,25 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </button>
             </div>
 
-            {/* the actual rules page, default appearance */}
-            <div className="bg-black/10" style={{ height: "min(60vh, 460px)" }}>
-              <iframe
-                src={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
-                title="Rules"
-                className="h-full w-full"
-                loading="lazy"
-                style={{ border: 0, background: "#fff" }}
-              />
+            {/* Fallback: widget gate.js tidak berhasil dimuat (offline/origin down).
+                Jangan pakai iframe — rules.xyc.my.id mengirim X-Frame-Options:
+                SAMEORIGIN sehingga embed akan diblokir dan terlihat kosong. */}
+            <div className="px-4 py-6 text-sm opacity-80" style={{ minHeight: 180 }}>
+              <p className="mb-2 font-semibold">Widget kebijakan nggak bisa dimuat.</p>
+              <p className="leading-relaxed opacity-70">
+                Sepertinya koneksi ke {rulesOrigin.replace(/^https?:\/\//, "")} lagi
+                bermasalah. Baca dulu aturannya di tab baru sebelum gabung, ya.
+              </p>
             </div>
 
             <div className="flex items-center gap-2 border-t border-white/10 px-3 py-3">
               <a
-                href={data?.rulesUrl || "https://rules.xyc.my.id/docs"}
+                href={rulesOrigin}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 rounded-xl border border-white/15 py-2.5 text-sm font-medium opacity-90 transition hover:opacity-100"
               >
-                ⧉ Di tab baru
+                ⧉ Baca rules
               </a>
               <button
                 onClick={() => {
