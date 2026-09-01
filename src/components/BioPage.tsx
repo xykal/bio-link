@@ -175,6 +175,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             onPointerUp={avatarPressEnd}
             onPointerLeave={avatarPressEnd}
             onPointerCancel={avatarPressEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
           >
             <div
               className={`shape-${profile?.shape || "circle"} h-full w-full overflow-hidden ${

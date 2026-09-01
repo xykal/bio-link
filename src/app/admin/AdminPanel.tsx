@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon, ICON_KEYS } from "@/components/Icons";
-import { FONT_KEYS, FONTS } from "@/lib/fonts";
+import { FONT_KEYS, FONTS, fontCss } from "@/lib/fonts";
 import type {
   Store,
   LinkItem,
@@ -389,20 +389,24 @@ export default function AdminPanel() {
                 <ImageField label="Banner" value={profile.banner} onChange={(v) => setProfile({ ...profile, banner: v })} onUpload={upload} folder="bio-link/banner" />
               </div>
               <Field label="Bentuk avatar">
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
                   {SHAPES.map((s) => (
                     <button
                       key={s.key}
                       type="button"
                       title={s.label}
                       onClick={() => setProfile({ ...profile, shape: s.key })}
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl border text-lg transition ${
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
                         profile.shape === s.key
-                          ? "border-violet-400/70 bg-violet-500/20 text-white"
-                          : "border-white/10 bg-white/5 text-white/50 hover:text-white"
+                          ? "border-violet-400/70 bg-violet-500/20"
+                          : "border-white/10 bg-white/5 hover:border-white/30"
                       }`}
                     >
-                      {s.icon}
+                      {/* actual shape preview */}
+                      <span
+                        className={`block h-7 w-7 bg-gradient-to-br from-violet-400 to-fuchsia-500 shape-${s.key}`}
+                      />
+                      <span className="text-[10px] text-white/60">{s.label}</span>
                     </button>
                   ))}
                 </div>
@@ -530,11 +534,25 @@ export default function AdminPanel() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {FONT_TARGETS.map((t) => (
                 <Field key={t.key} label={t.label}>
-                  <select className={inputCls} value={fonts[t.key]} onChange={(e) => setFonts({ ...fonts, [t.key]: e.target.value })}>
+                  {/* select with per-option font-style preview */}
+                  <select
+                    className={inputCls}
+                    value={fonts[t.key]}
+                    onChange={(e) => setFonts({ ...fonts, [t.key]: e.target.value })}
+                  >
                     {FONT_KEYS.map((k) => (
-                      <option key={k} value={k}>{(FONTS[k] as any).label}</option>
+                      <option key={k} value={k} style={{ fontFamily: fontCss(k) }}>
+                        {(FONTS[k] as any).label}
+                      </option>
                     ))}
                   </select>
+                  {/* live preview of the chosen font */}
+                  <div
+                    className="mt-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-2xl font-bold text-white"
+                    style={{ fontFamily: fontCss(fonts[t.key]) }}
+                  >
+                    Aa Bb Cc 123
+                  </div>
                 </Field>
               ))}
             </div>

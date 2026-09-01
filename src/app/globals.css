@@ -64,6 +64,14 @@ body {
   border-radius: 58% 42% 55% 45% / 55% 46% 54% 45%;
 }
 
+/* long-press avatar: no native context menu / text selection / drag */
+.avatar-frame {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
