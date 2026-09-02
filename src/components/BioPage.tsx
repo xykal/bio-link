@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
@@ -33,6 +33,28 @@ type XycGateApi = {
 function getXycGate(): XycGateApi | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as Window & { XycGate?: XycGateApi }).XycGate;
+}
+
+// Catat klik link. Pakai sendBeacon agar tetap terkirim walau tab berpindah.
+function trackLinkClick(id: string, title: string) {
+  const body = JSON.stringify({ linkId: id, title });
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(
+        "/api/track/click",
+        new Blob([body], { type: "application/json" })
+      );
+      return;
+    }
+  } catch {
+    /* fallback di bawah */
+  }
+  fetch("/api/track/click", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {});
 }
 
 function rulesOriginOf(url?: string): string {
@@ -273,6 +295,12 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   // Story viewer
   const [storyIndex, setStoryIndex] = useState<number | null>(null);
   const [storyProgress, setStoryProgress] = useState(0);
+  const [paused, setPaused] = useState(false); // long-press = tahan sementara
+  const [muted, setMuted] = useState(true); // video mulai muted (aturan autoplay)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const pressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+  const pausedRef = useRef(false);
   const [likeMap, setLikeMap] = useState<Record<string, number>>({});
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState("");
@@ -323,6 +351,27 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     fetch("/api/track", { method: "POST" }).catch(() => {});
   }, []);
 
+  // Long-press menahan story sementara; lepas = lanjut lagi.
+  const beginPress = useCallback(() => {
+    longPressed.current = false;
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      pausedRef.current = true;
+      setPaused(true);
+    }, 220);
+  }, []);
+  const endPress = useCallback(() => {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    if (longPressed.current) {
+      pausedRef.current = false;
+      setPaused(false);
+    }
+  }, []);
+
   // Timer progres story: isi bar lalu lanjut ke story berikutnya.
   useEffect(() => {
     if (storyIndex === null) return;
@@ -339,6 +388,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     let elapsed = 0;
     const stepMs = 100;
     const id = setInterval(() => {
+      if (pausedRef.current) return; // ditahan (long-press)
       elapsed += stepMs;
       setStoryProgress(Math.min(100, (elapsed / dur) * 100));
       if (elapsed >= dur) {
@@ -352,7 +402,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     return () => clearInterval(id);
   }, [storyIndex, data]);
 
+  // Video: ikut ditahan saat long-press.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (paused) v.pause();
+    else void v.play().catch(() => {});
+  }, [paused, storyIndex]);
+
   function closeStory() {
+    pausedRef.current = false;
+    setPaused(false);
     setStoryIndex(null);
     setStoryProgress(0);
     setFloating([]);
@@ -363,10 +423,14 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       closeStory();
       return;
     }
+    pausedRef.current = false;
+    setPaused(false);
     setStoryProgress(0);
     setStoryIndex(i);
   }
   function openStory() {
+    pausedRef.current = false;
+    setPaused(false);
     setStoryProgress(0);
     setStoryIndex(0);
   }
@@ -414,6 +478,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   }
 
   function handleClick(e: React.MouseEvent, link: LinkItem) {
+    trackLinkClick(link.id, link.title);
     if (link.gate !== "rules") return;
     e.preventDefault();
     const XG = getXycGate();
@@ -987,16 +1052,37 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </svg>
             </button>
 
+            {/* pengeras suara (khusus video) */}
+            {activeStory.type === "video" && (
+              <button
+                onClick={() => setMuted((m) => !m)}
+                className="absolute right-3 top-14 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
+                aria-label={muted ? "Nyalakan suara" : "Matikan suara"}
+              >
+                {muted ? (
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                    <path d="m23 9-6 6M17 9l6 6" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />
+                  </svg>
+                )}
+              </button>
+            )}
+
             {/* konten story */}
             {activeStory.type === "video" && activeStory.media ? (
               <video
                 key={activeStory.id}
+                ref={videoRef}
                 src={activeStory.media}
                 className="absolute inset-0 h-full w-full bg-black object-contain"
                 autoPlay
-                muted
+                muted={muted}
                 playsInline
-                controls
                 onEnded={() => gotoStory((storyIndex ?? 0) + 1)}
                 onTimeUpdate={(e) => {
                   const v = e.currentTarget;
@@ -1005,6 +1091,42 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                   }
                 }}
               />
+            ) : activeStory.type === "audio" && activeStory.media ? (
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-7 p-8"
+                style={{
+                  background:
+                    activeStory.bg || `linear-gradient(135deg, ${accent}, ${accent}88)`,
+                }}
+              >
+                {/* visual gelombang statis ala voice note */}
+                <div className="flex h-20 items-end gap-1.5" aria-hidden>
+                  {[6, 12, 20, 30, 22, 34, 16, 26, 10, 18, 28, 14, 24, 8, 20, 12].map(
+                    (h, i) => (
+                      <span
+                        key={i}
+                        className="w-1.5 rounded-full bg-white/85"
+                        style={{ height: `${h * 2}px`, opacity: 0.55 + (i % 4) * 0.12 }}
+                      />
+                    )
+                  )}
+                </div>
+                <audio
+                  key={activeStory.id}
+                  src={activeStory.media}
+                  controls
+                  autoPlay
+                  className="w-full max-w-xs"
+                />
+                {activeStory.text && (
+                  <p
+                    className="max-w-xs text-center text-lg font-semibold leading-snug text-white drop-shadow"
+                    style={{ fontFamily: "var(--font-bio)" }}
+                  >
+                    {activeStory.text}
+                  </p>
+                )}
+              </div>
             ) : activeStory.type === "image" && activeStory.media ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -1029,17 +1151,49 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </div>
             )}
 
-            {/* zona tap: kiri = sebelumnya, kanan = berikutnya */}
+            {/* zona tap: kiri = sebelumnya, kanan = berikutnya; tahan = jeda */}
             <button
               className="absolute left-0 top-0 z-10 h-full w-1/3"
-              onClick={() => gotoStory((storyIndex ?? 0) - 1)}
-              aria-label="Story sebelumnya"
+              onPointerDown={beginPress}
+              onPointerUp={endPress}
+              onPointerLeave={endPress}
+              onPointerCancel={endPress}
+              onClick={() => {
+                if (longPressed.current) {
+                  longPressed.current = false;
+                  return;
+                }
+                gotoStory((storyIndex ?? 0) - 1);
+              }}
+              aria-label="Story sebelumnya (tahan untuk jeda)"
             />
             <button
               className="absolute right-0 top-0 z-10 h-full w-2/3"
-              onClick={() => gotoStory((storyIndex ?? 0) + 1)}
-              aria-label="Story berikutnya"
+              onPointerDown={beginPress}
+              onPointerUp={endPress}
+              onPointerLeave={endPress}
+              onPointerCancel={endPress}
+              onClick={() => {
+                if (longPressed.current) {
+                  longPressed.current = false;
+                  return;
+                }
+                gotoStory((storyIndex ?? 0) + 1);
+              }}
+              aria-label="Story berikutnya (tahan untuk jeda)"
             />
+
+            {/* penanda sedang dijeda (long-press) */}
+            {paused && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                <div className="flex items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-xs font-medium text-white backdrop-blur-sm">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                    <path d="M8 5h3v14H8zM13 5h3v14h-3z" />
+                  </svg>
+                  Dijeda
+                </div>
+              </div>
+            )}
 
             {/* komentar melayang di kanan-bawah */}
             <div className="pointer-events-none absolute bottom-24 right-3 z-20 flex w-48 flex-col items-end gap-1.5">
@@ -1056,7 +1210,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
             {/* kontrol bawah: like + komentar */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/85 to-transparent p-3 pt-8">
-              {activeStory.type !== "text" && activeStory.text && (
+              {activeStory.type !== "text" && activeStory.type !== "audio" && activeStory.text && (
                 <p
                   className="mb-2 text-sm font-medium text-white drop-shadow"
                   style={{ fontFamily: "var(--font-bio)" }}

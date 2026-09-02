@@ -153,6 +153,10 @@ type StatsResp = {
     total: number;
     byDay: Record<string, number>;
     visits: { at: number; path: string; ref: string; ua: string }[];
+    clicks: number;
+    linkClicks: Record<string, { title: string; count: number }>;
+    refs: Record<string, number>;
+    devices: Record<string, number>;
   };
   server: {
     node: string;
@@ -216,6 +220,13 @@ export default function AdminPanel() {
   const [stories, setStories] = useState<Story[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
+  const [recId, setRecId] = useState<string | null>(null);
+  const [recTime, setRecTime] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const recChunksRef = useRef<BlobPart[]>([]);
+  const recTimerRef = useRef<number | null>(null);
+  const recStartRef = useRef(0);
   const [view, setView] = useState<NavKey>("profil");
   const [stats, setStats] = useState<StatsResp | null>(null);
   const [team, setTeam] = useState<Member[]>([]);
@@ -303,19 +314,73 @@ export default function AdminPanel() {
   }, [authed, view]);
 
   // ---- story helpers ----
-  function addStory(type: "image" | "text" | "video") {
+  function addStory(type: "image" | "text" | "video" | "audio") {
     const st: Story = {
       id: crypto.randomUUID(),
       type,
       media: "",
+      mediaPublicId: "",
       text: type === "text" ? "Story baru" : "",
       bg: STORY_BGS[0],
-      duration: 5,
+      duration: type === "audio" ? 15 : 5,
       createdAt: Date.now(),
       likes: 0,
       comments: [],
     };
     setStories((s) => [...s, st]);
+  }
+
+  // ---- rekam voice note (mic) ----
+  async function startRecording(storyId: string) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      flash("Browser tidak mendukung perekaman suara", false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      recChunksRef.current = [];
+      const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
+        (m) => MediaRecorder.isTypeSupported(m)
+      );
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recorderRef.current = rec;
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) recChunksRef.current.push(e.data);
+      };
+      rec.onstart = () => {
+        recStartRef.current = Date.now();
+        setRecId(storyId);
+        setRecTime(0);
+        recTimerRef.current = window.setInterval(
+          () => setRecTime(Math.round((Date.now() - recStartRef.current) / 1000)),
+          250
+        );
+      };
+      rec.onstop = () => {
+        const type = rec.mimeType || mime || "audio/webm";
+        const blob = new Blob(recChunksRef.current, { type });
+        const dur = Math.max(1, Math.round((Date.now() - recStartRef.current) / 1000));
+        const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+        const file = new File([blob], `voice-note-${Date.now()}.${ext}`, { type });
+        stream.getTracks().forEach((t) => t.stop());
+        recStreamRef.current = null;
+        if (recTimerRef.current) {
+          clearInterval(recTimerRef.current);
+          recTimerRef.current = null;
+        }
+        setRecId(null);
+        setRecTime(0);
+        if (blob.size > 0) void uploadStoryMedia(storyId, file, dur);
+      };
+      rec.start();
+    } catch {
+      flash("Gagal mengakses mikrofon (izin ditolak?)", false);
+    }
+  }
+  function stopRecording() {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== "inactive") rec.stop();
   }
   function updateStory(id: string, patch: Partial<Story>) {
     setStories((s) => s.map((st) => (st.id === id ? { ...st, ...patch } : st)));
@@ -606,7 +671,7 @@ export default function AdminPanel() {
     folder: string,
     file: File,
     onProgress?: (pct: number) => void
-  ): Promise<string> {
+  ): Promise<{ url: string; publicId: string; resourceType: string }> {
     const sr = await fetch("/api/upload/sign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -616,7 +681,7 @@ export default function AdminPanel() {
     if (!sr.ok || !s.cloudName) {
       throw new Error(s.error || "Gagal menyiapkan upload (Cloudinary?)");
     }
-    return new Promise<string>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const fd = new FormData();
       fd.set("file", file);
@@ -630,14 +695,23 @@ export default function AdminPanel() {
         }
       };
       xhr.onload = () => {
-        let d: { secure_url?: string; error?: { message?: string } } = {};
+        let d: {
+          secure_url?: string;
+          public_id?: string;
+          resource_type?: string;
+          error?: { message?: string };
+        } = {};
         try {
           d = JSON.parse(xhr.responseText);
         } catch {
           /* ignore */
         }
         if (xhr.status >= 200 && xhr.status < 300 && d.secure_url) {
-          resolve(d.secure_url);
+          resolve({
+            url: d.secure_url,
+            publicId: d.public_id || "",
+            resourceType: d.resource_type || "image",
+          });
         } else {
           reject(new Error(d.error?.message || `Upload gagal (HTTP ${xhr.status})`));
         }
@@ -650,12 +724,20 @@ export default function AdminPanel() {
   }
 
   // Bungkus upload story: atur state progres + flash hasil.
-  async function uploadStoryMedia(storyId: string, file: File) {
+  async function uploadStoryMedia(storyId: string, file: File, durationSec?: number) {
     setUploadingId(storyId);
     setUploadPct(0);
     try {
-      const url = await uploadDirect("bio-link/story", file, (p) => setUploadPct(p));
-      updateStory(storyId, { media: url });
+      const res = await uploadDirect("bio-link/story", file, (p) => setUploadPct(p));
+      updateStory(storyId, {
+        media: res.url,
+        mediaPublicId: res.publicId,
+        mediaResourceType:
+          res.resourceType === "video" || res.resourceType === "raw"
+            ? res.resourceType
+            : "image",
+        ...(durationSec ? { duration: Math.max(1, Math.round(durationSec)) } : {}),
+      });
       flash("Upload selesai");
     } catch (err) {
       flash(err instanceof Error ? err.message : "Upload gagal", false);
@@ -1549,6 +1631,12 @@ export default function AdminPanel() {
               >
                 + Video
               </button>
+              <button
+                onClick={() => addStory("audio")}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              >
+                + Voice note
+              </button>
             </div>
           }
         >
@@ -1578,6 +1666,20 @@ export default function AdminPanel() {
                         muted
                         playsInline
                       />
+                    ) : st.type === "audio" ? (
+                      <span className="flex flex-col items-center gap-1 leading-tight">
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-6 w-6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+                        </svg>
+                        {st.media ? `${st.duration}s` : "Kosong"}
+                      </span>
                     ) : (
                       <span className="leading-tight">
                         {st.type === "video" ? "Video" : st.text || "Story"}
@@ -1585,7 +1687,77 @@ export default function AdminPanel() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    {st.type !== "text" ? (
+                    {st.type === "audio" ? (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {recId === st.id ? (
+                            <button
+                              type="button"
+                              onClick={stopRecording}
+                              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/50 bg-rose-500/15 px-3 py-1.5 text-xs font-semibold text-rose-200"
+                            >
+                              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500" />
+                              Stop ({recTime}s)
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startRecording(st.id)}
+                              disabled={uploadingId === st.id}
+                              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white disabled:opacity-40"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+                              </svg>
+                              Rekam suara
+                            </button>
+                          )}
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white">
+                            <Icon name="play" className="h-3.5 w-3.5" />
+                            {st.media ? "Ganti audio" : "Upload audio"}
+                            <input
+                              type="file"
+                              accept="audio/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                void uploadStoryMedia(st.id, f);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {uploadingId === st.id && (
+                          <div className="space-y-1">
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-[width]"
+                                style={{ width: `${uploadPct}%` }}
+                              />
+                            </div>
+                            <p className="text-[11px] text-white/50">
+                              Mengupload... {uploadPct}%
+                            </p>
+                          </div>
+                        )}
+                        {st.media && <audio src={st.media} controls className="h-9 w-full" />}
+                        <input
+                          className={inputCls}
+                          value={st.text}
+                          placeholder="Caption (opsional)"
+                          maxLength={280}
+                          onChange={(e) => updateStory(st.id, { text: e.target.value })}
+                        />
+                      </>
+                    ) : st.type !== "text" ? (
                       <>
                         <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white">
                           <Icon
@@ -1665,13 +1837,13 @@ export default function AdminPanel() {
                           <input
                             type="number"
                             min={1}
-                            max={30}
+                            max={120}
                             value={st.duration}
                             onChange={(e) =>
                               updateStory(st.id, {
                                 duration: Math.max(
                                   1,
-                                  Math.min(30, Number(e.target.value) || 5)
+                                  Math.min(120, Number(e.target.value) || 5)
                                 ),
                               })
                             }
@@ -1813,12 +1985,71 @@ export default function AdminPanel() {
                 <StatCard label="Total kunjungan" value={stats.analytics.total} />
                 <StatCard label="Hari ini" value={todayCount(stats.analytics.byDay)} />
                 <StatCard label="7 hari terakhir" value={last7Total(stats.analytics.byDay)} />
-                <StatCard label="Jumlah story" value={stories.length} />
+                <StatCard label="Total klik link" value={stats.analytics.clicks || 0} />
               </div>
 
               <div>
                 <p className="mb-2 text-sm font-semibold text-white/80">Grafik 7 hari</p>
                 <WeekChart byDay={stats.analytics.byDay} />
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-white/80">
+                  Link paling sering diklik
+                </p>
+                <div className="space-y-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                  {topLinks(stats.analytics.linkClicks).length === 0 ? (
+                    <p className="text-xs text-white/40">
+                      Belum ada klik tercatat. Klik link di halaman bio untuk mulai menghitung.
+                    </p>
+                  ) : (
+                    topLinks(stats.analytics.linkClicks).map((l, i) => (
+                      <BarRow
+                        key={l.id}
+                        label={`${i + 1}. ${l.title}`}
+                        value={l.count}
+                        max={topLinks(stats.analytics.linkClicks)[0]?.count || 1}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-white/80">Sumber kunjungan</p>
+                  <div className="space-y-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    {topEntries(stats.analytics.refs).length === 0 ? (
+                      <p className="text-xs text-white/40">Belum ada data.</p>
+                    ) : (
+                      topEntries(stats.analytics.refs).map(([host, n]) => (
+                        <BarRow
+                          key={host}
+                          label={host}
+                          value={n}
+                          max={topEntries(stats.analytics.refs)[0]?.[1] || 1}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-white/80">Perangkat</p>
+                  <div className="space-y-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    {topEntries(stats.analytics.devices).length === 0 ? (
+                      <p className="text-xs text-white/40">Belum ada data.</p>
+                    ) : (
+                      topEntries(stats.analytics.devices).map(([dev, n]) => (
+                        <BarRow
+                          key={dev}
+                          label={DEVICE_LABELS[dev] || dev}
+                          value={n}
+                          max={topEntries(stats.analytics.devices)[0]?.[1] || 1}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -1965,6 +2196,50 @@ function shortHost(url: string) {
   } catch {
     return url.slice(0, 40);
   }
+}
+
+// Urutkan map {key: count} jadi daftar menurun, ambil n teratas.
+function topEntries(map: Record<string, number> | undefined, n = 8) {
+  return Object.entries(map || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n);
+}
+
+// Link paling sering diklik, diurut menurun.
+function topLinks(
+  map: Record<string, { title: string; count: number }> | undefined,
+  n = 10
+) {
+  return Object.entries(map || {})
+    .map(([id, v]) => ({ id, title: v.title || id, count: v.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n);
+}
+
+const DEVICE_LABELS: Record<string, string> = {
+  mobile: "Mobile",
+  desktop: "Desktop",
+  tablet: "Tablet",
+  bot: "Bot/crawler",
+};
+
+// Baris bar horisontal sederhana buat distribusi (link/referrer/device).
+function BarRow({ label, value, max }: { label: string; value: number; max: number }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="truncate text-white/70">{label}</span>
+        <span className="shrink-0 tabular-nums text-white/50">{value}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function StatCard({ label, value }: { label: string; value: number }) {

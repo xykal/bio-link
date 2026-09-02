@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
+import crypto, { randomUUID } from "crypto";
 import { getTechIcon } from "./stackIcons";
 
 export type LinkItem = {
@@ -75,11 +75,13 @@ export type StoryComment = {
 
 export type Story = {
   id: string;
-  type: "image" | "text" | "video";
-  media: string; // url gambar/video (untuk type image/video)
-  text: string; // caption (image/video) atau isi teks (text)
-  bg: string; // warna/gradasi latar untuk story teks
-  duration: number; // detik per story (dipakai image/text; video ikut panjang video)
+  type: "image" | "text" | "video" | "audio";
+  media: string; // url gambar/video/audio (untuk type image/video/audio)
+  mediaPublicId?: string; // public_id Cloudinary (buat auto-destroy 24 jam)
+  mediaResourceType?: "image" | "video" | "raw"; // resource_type Cloudinary
+  text: string; // caption (image/video/audio) atau isi teks (text)
+  bg: string; // warna/gradasi latar untuk story teks/audio
+  duration: number; // detik per story (image/text/audio; video ikut panjang video)
   createdAt: number;
   likes: number;
   comments: StoryComment[];
@@ -87,6 +89,39 @@ export type Story = {
 
 // Story otomatis dihapus total setelah 24 jam.
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Cloudinary: dipakai untuk menghapus aset story yang kedaluwarsa (signed destroy).
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
+const CLOUD_API_KEY = process.env.CLOUDINARY_API_KEY || "";
+const CLOUD_API_SECRET = process.env.CLOUDINARY_API_SECRET || "";
+
+// Hapus aset di Cloudinary (best-effort). Dipanggil saat story lewat 24 jam.
+async function destroyCloudinary(publicId: string, resourceType: string): Promise<void> {
+  if (!CLOUD_NAME || !CLOUD_API_KEY || !CLOUD_API_SECRET || !publicId) return;
+  const timestamp = Math.round(Date.now() / 1000);
+  // Parameter ditandatangani urut abjad: invalidate, public_id, timestamp.
+  const toSign = `invalidate=true&public_id=${publicId}&timestamp=${timestamp}${CLOUD_API_SECRET}`;
+  const signature = crypto.createHash("sha1").update(toSign, "utf8").digest("hex");
+  const body = new URLSearchParams({
+    public_id: publicId,
+    timestamp: String(timestamp),
+    invalidate: "true",
+    signature,
+    api_key: CLOUD_API_KEY,
+  });
+  try {
+    await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/destroy`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      }
+    );
+  } catch {
+    /* best-effort: kalau gagal, file yatim tak mengganggu */
+  }
+}
 
 // Tata letak daftar link di halaman publik
 export type LinkLayout = "list" | "grid" | "compact";
@@ -401,17 +436,37 @@ export function normalize(parsed: Partial<Store>): Store {
     stories: Array.isArray(parsed.stories)
       ? parsed.stories
           .filter(
-            (s) => s && (s.type === "image" || s.type === "text" || s.type === "video")
+            (s) =>
+              s &&
+              (s.type === "image" ||
+                s.type === "text" ||
+                s.type === "video" ||
+                s.type === "audio")
           )
           .slice(0, 30)
           .map((s) => ({
             id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
-            type: s.type === "text" ? "text" : s.type === "video" ? "video" : "image",
+            type:
+              s.type === "text"
+                ? "text"
+                : s.type === "video"
+                  ? "video"
+                  : s.type === "audio"
+                    ? "audio"
+                    : "image",
             media: typeof s.media === "string" ? s.media.slice(0, 500) : "",
+            mediaPublicId:
+              typeof s.mediaPublicId === "string" ? s.mediaPublicId.slice(0, 300) : "",
+            mediaResourceType:
+              s.mediaResourceType === "image" ||
+              s.mediaResourceType === "video" ||
+              s.mediaResourceType === "raw"
+                ? s.mediaResourceType
+                : undefined,
             text: typeof s.text === "string" ? s.text.slice(0, 280) : "",
             bg: typeof s.bg === "string" ? s.bg.slice(0, 120) : "",
             duration:
-              typeof s.duration === "number" && s.duration >= 1 && s.duration <= 30
+              typeof s.duration === "number" && s.duration >= 1 && s.duration <= 120
                 ? Math.round(s.duration)
                 : 5,
             createdAt: typeof s.createdAt === "number" ? s.createdAt : Date.now(),
@@ -524,17 +579,27 @@ async function fileWrite(store: Store): Promise<void> {
   await fs.writeFile(DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
 }
 
-// Buang story yang sudah lewat 24 jam (auto-hapus total).
-function pruneExpiredStories(store: Store): { store: Store; changed: boolean } {
+// Buang story yang sudah lewat 24 jam (auto-hapus total). Kembalikan juga story
+// yang dihapus agar medianya bisa dibuang dari Cloudinary.
+function pruneExpiredStories(store: Store): {
+  store: Store;
+  changed: boolean;
+  expired: Story[];
+} {
   const now = Date.now();
-  const kept = store.stories.filter((s) => now - (s.createdAt || 0) < STORY_TTL_MS);
-  if (kept.length === store.stories.length) return { store, changed: false };
-  return { store: { ...store, stories: kept }, changed: true };
+  const kept: Story[] = [];
+  const expired: Story[] = [];
+  for (const s of store.stories) {
+    if (now - (s.createdAt || 0) < STORY_TTL_MS) kept.push(s);
+    else expired.push(s);
+  }
+  if (expired.length === 0) return { store, changed: false, expired };
+  return { store: { ...store, stories: kept }, changed: true, expired };
 }
 
 export async function readStore(): Promise<Store> {
   const raw = useD1 ? await d1Read() : await fileRead();
-  const { store, changed } = pruneExpiredStories(raw);
+  const { store, changed, expired } = pruneExpiredStories(raw);
   if (changed) {
     // Persist penghapusan. Di fs read-only (serverless file-mode) gagal diam-diam;
     // story tetap disembunyikan dari hasil baca.
@@ -543,6 +608,12 @@ export async function readStore(): Promise<Store> {
     } catch {
       /* ignore */
     }
+    // Hapus media story kedaluwarsa dari Cloudinary (best-effort, di-await agar
+    // tuntas sebelum function selesai di serverless).
+    const destroys = expired
+      .filter((s) => s.mediaPublicId && s.mediaResourceType)
+      .map((s) => destroyCloudinary(s.mediaPublicId as string, s.mediaResourceType as string));
+    if (destroys.length) await Promise.allSettled(destroys);
   }
   return store;
 }
