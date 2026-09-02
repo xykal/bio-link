@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
-import type { LinkItem, Store } from "@/lib/data";
+import type { LinkItem, Store, Bubble, BubbleStyle, BubblePosition } from "@/lib/data";
 
 type PublicData = {
   profile: Store["profile"];
@@ -16,6 +16,8 @@ type PublicData = {
   theme: "dark" | "light";
   linkShape: Store["linkShape"];
   stackAlign: Store["stackAlign"];
+  linkLayout: Store["linkLayout"];
+  bubble: Store["bubble"];
   sections: Store["sections"];
   branding: Store["branding"];
   rulesUrl: string;
@@ -51,6 +53,8 @@ function toPublic(s: Store): PublicData {
     theme: s.theme,
     linkShape: s.linkShape || "rounded",
     stackAlign: s.stackAlign || "right",
+    linkLayout: s.linkLayout || "list",
+    bubble: s.bubble || { enabled: false, text: "", style: "speech", position: "top-right" },
     sections: s.sections || { stack: true, team: true },
     branding: s.branding,
     rulesUrl: s.seo.rulesUrl,
@@ -70,6 +74,165 @@ const LINK_RADIUS: Record<string, number> = {
   soft: 24,
   square: 10,
 };
+
+/* ---------------- Gelembung pesan di foto profil ---------------- */
+const BUBBLE_ANCHOR: Record<BubblePosition, string> = {
+  "top-left": "bottom-full left-0 mb-2",
+  "top-right": "bottom-full right-0 mb-2",
+  left: "right-full top-1/2 mr-2 -translate-y-1/2",
+  right: "left-full top-1/2 ml-2 -translate-y-1/2",
+  "bottom-left": "top-full left-0 mt-2",
+  "bottom-right": "top-full right-0 mt-2",
+};
+
+const BUBBLE_TAIL: Record<BubblePosition, string> = {
+  "top-left": "-bottom-1 left-5",
+  "top-right": "-bottom-1 right-5",
+  left: "-right-1 top-1/2 -translate-y-1/2",
+  right: "-left-1 top-1/2 -translate-y-1/2",
+  "bottom-left": "-top-1 left-5",
+  "bottom-right": "-top-1 right-5",
+};
+
+type BubbleVisual = {
+  boxClass: string;
+  boxStyle: React.CSSProperties;
+  tailColor: string;
+  tailBorder?: string;
+  showTail: boolean;
+  maxWidth: number;
+};
+
+function bubbleVisual(
+  style: BubbleStyle,
+  accent: string,
+  isLight: boolean,
+  position: BubblePosition
+): BubbleVisual {
+  const side = position === "left" || position === "right";
+  const maxWidth = side ? 132 : 168;
+  const base: BubbleVisual = {
+    boxClass: "",
+    boxStyle: {},
+    tailColor: accent,
+    showTail: true,
+    maxWidth,
+  };
+  switch (style) {
+    case "pill":
+      return {
+        ...base,
+        boxStyle: { background: accent, color: "#fff", borderRadius: 9999 },
+        showTail: false,
+      };
+    case "glass":
+      return {
+        ...base,
+        boxClass: "backdrop-blur-md",
+        boxStyle: {
+          background: isLight ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.10)",
+          border: `1px solid ${isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.18)"}`,
+          color: isLight ? "#18181b" : "#ffffff",
+          borderRadius: 14,
+        },
+        tailColor: isLight ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.10)",
+        tailBorder: `1px solid ${isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.18)"}`,
+      };
+    case "neon":
+      return {
+        ...base,
+        boxStyle: {
+          background: "#08080d",
+          border: `1.5px solid ${accent}`,
+          color: accent,
+          borderRadius: 12,
+          boxShadow: `0 0 14px ${accent}80`,
+        },
+        showTail: false,
+      };
+    case "outline":
+      return {
+        ...base,
+        boxStyle: {
+          background: isLight ? "rgba(255,255,255,0.6)" : "transparent",
+          border: `1.5px solid ${accent}`,
+          color: accent,
+          borderRadius: 12,
+        },
+        showTail: false,
+      };
+    case "gradient":
+      return {
+        ...base,
+        boxClass: "shadow-lg",
+        boxStyle: {
+          background: `linear-gradient(135deg, ${accent}, ${accent}99)`,
+          color: "#fff",
+          borderRadius: 14,
+        },
+      };
+    case "note":
+      return {
+        ...base,
+        boxClass: "shadow-md",
+        boxStyle: {
+          background: "#fde68a",
+          color: "#78350f",
+          borderRadius: 8,
+          transform: "rotate(-2deg)",
+        },
+        tailColor: "#fde68a",
+      };
+    case "badge":
+      return {
+        ...base,
+        boxClass: "shadow-lg",
+        boxStyle: { background: accent, color: "#fff", borderRadius: 9999 },
+        maxWidth: side ? 120 : 150,
+        showTail: false,
+      };
+    case "speech":
+    default:
+      return {
+        ...base,
+        boxClass: "shadow-lg",
+        boxStyle: { background: accent, color: "#fff", borderRadius: 14 },
+      };
+  }
+}
+
+function ProfileBubble({
+  bubble,
+  accent,
+  isLight,
+}: {
+  bubble: Bubble;
+  accent: string;
+  isLight: boolean;
+}) {
+  const position = bubble.position;
+  const v = bubbleVisual(bubble.style, accent, isLight, position);
+  return (
+    <div
+      className={`pointer-events-none absolute z-20 ${BUBBLE_ANCHOR[position]}`}
+      style={{ maxWidth: v.maxWidth }}
+      aria-hidden
+    >
+      <div
+        className={`relative px-3 py-1.5 text-[11px] font-semibold leading-snug ${v.boxClass}`}
+        style={v.boxStyle}
+      >
+        {bubble.text}
+        {v.showTail && (
+          <span
+            className={`absolute h-2.5 w-2.5 rotate-45 ${BUBBLE_TAIL[position]}`}
+            style={{ background: v.tailColor, border: v.tailBorder }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function BioPage({ initial }: { initial: Store | null }) {
   const [data, setData] = useState<PublicData | null>(() =>
@@ -145,6 +308,9 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const stack = data?.stack || [];
   const team = data?.team || [];
   const sections = data?.sections || { stack: true, team: true };
+  const bubble = data?.bubble;
+  const showBubble = !!bubble?.enabled && !!bubble.text?.trim();
+  const layout = data?.linkLayout || "list";
   const stackJustify =
     data?.stackAlign === "left"
       ? "justify-start"
@@ -214,46 +380,58 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </div>
             ) : null}
 
-            {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
+            {/* Avatar + bubble: wrapper jadi anchor posisi gelembung pesan */}
             <div
-              className={`avatar-frame shape-${shape} absolute left-1/2 -translate-x-1/2 cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none ${
-                profile?.banner ? "-bottom-10" : "relative"
-              }`}
+              className={
+                profile?.banner
+                  ? "absolute left-1/2 -translate-x-1/2 -bottom-10"
+                  : "relative mx-auto"
+              }
               style={{ width: 108, height: 108 }}
-              onClick={() => setShowAvatarPreview((v) => !v)}
-              role="button"
-              tabIndex={0}
-              aria-label="Lihat foto profil"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setShowAvatarPreview((v) => !v);
-                }
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-              onDragStart={(e) => e.preventDefault()}
             >
-              {profile?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
-                  alt={profile.name}
-                  decoding="async"
-                  fetchPriority="high"
-                  className="h-full w-full object-cover"
-                  style={{ objectPosition: avatarPos }}
-                />
-              ) : (
-                <div
-                  className="flex h-full w-full items-center justify-center text-4xl font-bold"
-                  style={{
-                    fontFamily: "var(--font-name)",
-                    background: isLight ? "#ececf1" : "#1b1b25",
-                    color: isLight ? "#a1a1aa" : "#4b4b5a",
-                  }}
-                >
-                  {(profile?.name || "?").charAt(0).toUpperCase()}
-                </div>
+              {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
+              <div
+                className={`avatar-frame shape-${shape} h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
+                onClick={() => setShowAvatarPreview((v) => !v)}
+                role="button"
+                tabIndex={0}
+                aria-label="Lihat foto profil"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setShowAvatarPreview((v) => !v);
+                  }
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+              >
+                {profile?.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
+                    alt={profile.name}
+                    decoding="async"
+                    fetchPriority="high"
+                    className="h-full w-full object-cover"
+                    style={{ objectPosition: avatarPos }}
+                  />
+                ) : (
+                  <div
+                    className="flex h-full w-full items-center justify-center text-4xl font-bold"
+                    style={{
+                      fontFamily: "var(--font-name)",
+                      background: isLight ? "#ececf1" : "#1b1b25",
+                      color: isLight ? "#a1a1aa" : "#4b4b5a",
+                    }}
+                  >
+                    {(profile?.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              {/* Gelembung pesan di foto profil (tampil untuk semua orang) */}
+              {showBubble && bubble && (
+                <ProfileBubble bubble={bubble} accent={accent} isLight={!!isLight} />
               )}
             </div>
           </div>
@@ -304,10 +482,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </div>
           )}
 
-          {data && data.links.length > 0 && (
-            <div className="mt-6 w-full space-y-3">
+          {/* LINK: tata letak grid (2 kolom, kartu terpusat) */}
+          {data && data.links.length > 0 && layout === "grid" && (
+            <div className="mt-6 grid w-full grid-cols-2 gap-3">
               {data.links.map((l, i) => {
                 const gated = l.gate === "rules";
+                const label =
+                  l.kind === "join_group"
+                    ? "Join Grup"
+                    : l.kind === "channel"
+                      ? "Link Saluran"
+                      : "";
                 return (
                   <a
                     key={l.id}
@@ -315,7 +500,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => handleClick(e, l)}
-                    className={`group flex w-full items-center gap-3 border px-4 py-3.5 text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`group flex flex-col items-center gap-2 border px-3 py-4 text-center backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
                       isLight
                         ? "border-black/5 bg-white shadow-sm hover:shadow-lg"
                         : "border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.09]"
@@ -323,17 +508,80 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                     style={{ borderRadius: linkRadius, animationDelay: `${i * 40}ms` }}
                   >
                     <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center text-white"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center text-white"
+                      style={{
+                        borderRadius: linkRadius >= 9999 ? 9999 : 14,
+                        background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
+                      }}
+                    >
+                      <Icon name={l.icon} className="h-5 w-5" />
+                    </span>
+                    <span
+                      className="break-words text-sm font-semibold"
+                      style={{ fontFamily: "var(--font-link)" }}
+                    >
+                      {l.title}
+                    </span>
+                    {label && (
+                      <span
+                        className="text-[10px] uppercase tracking-wider opacity-45"
+                        style={{ fontFamily: "var(--font-label)" }}
+                      >
+                        {label}
+                      </span>
+                    )}
+                    {gated && (
+                      <span
+                        className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${
+                          isLight ? "border-black/10 text-black/50" : "border-white/10 text-white/50"
+                        }`}
+                      >
+                        <Icon name="lock" className="h-2.5 w-2.5" />
+                        Gate
+                      </span>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          )}
+
+          {/* LINK: tata letak list / compact (baris penuh) */}
+          {data && data.links.length > 0 && layout !== "grid" && (
+            <div className={`mt-6 w-full ${layout === "compact" ? "space-y-2" : "space-y-3"}`}>
+              {data.links.map((l, i) => {
+                const gated = l.gate === "rules";
+                const compact = layout === "compact";
+                return (
+                  <a
+                    key={l.id}
+                    href={l.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => handleClick(e, l)}
+                    className={`group flex w-full items-center gap-3 border text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 ${
+                      compact ? "px-3 py-2.5" : "px-4 py-3.5"
+                    } ${
+                      isLight
+                        ? "border-black/5 bg-white shadow-sm hover:shadow-lg"
+                        : "border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.09]"
+                    }`}
+                    style={{ borderRadius: linkRadius, animationDelay: `${i * 40}ms` }}
+                  >
+                    <span
+                      className={`flex shrink-0 items-center justify-center text-white ${
+                        compact ? "h-8 w-8" : "h-10 w-10"
+                      }`}
                       style={{
                         borderRadius: linkRadius >= 9999 ? 9999 : 12,
                         background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
                       }}
                     >
-                      <Icon name={l.icon} className="h-4.5 w-4.5" />
+                      <Icon name={l.icon} className={compact ? "h-4 w-4" : "h-4.5 w-4.5"} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span
-                        className="block truncate font-semibold"
+                        className={`block truncate font-semibold ${compact ? "text-sm" : ""}`}
                         style={{ fontFamily: "var(--font-link)" }}
                       >
                         {l.title}
@@ -504,13 +752,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 </div>
               )}
             </div>
-            <p
-              className="mt-3 text-center text-sm font-semibold text-white/90"
-              style={{ fontFamily: "var(--font-name)" }}
-            >
-              {profile?.name}
-            </p>
-            <p className="mt-1 text-center text-xs text-white/40">Klik di mana saja untuk menutup</p>
+            <p className="mt-3 text-center text-xs text-white/40">Klik di mana saja untuk menutup</p>
           </div>
         </div>
       )}

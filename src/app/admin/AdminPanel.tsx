@@ -18,6 +18,10 @@ import type {
   LinkShape,
   StackAlign,
   Sections,
+  Bubble,
+  BubbleStyle,
+  BubblePosition,
+  LinkLayout,
 } from "@/lib/data";
 
 const SHAPES: { key: ProfileShape; label: string }[] = [
@@ -65,6 +69,37 @@ const STACK_ALIGNS: { key: StackAlign; label: string }[] = [
   { key: "right", label: "Kanan" },
 ];
 
+const LINK_LAYOUT_LABELS: Record<LinkLayout, string> = {
+  list: "List (baris)",
+  grid: "Grid (2 kolom)",
+  compact: "Compact (rapat)",
+};
+
+const BUBBLE_STYLE_LABELS: Record<BubbleStyle, string> = {
+  speech: "Speech",
+  pill: "Pill",
+  glass: "Glass",
+  neon: "Neon",
+  outline: "Outline",
+  gradient: "Gradient",
+  note: "Note",
+  badge: "Badge",
+};
+
+const BUBBLE_POSITION_LABELS: Record<BubblePosition, string> = {
+  "top-left": "Atas kiri",
+  "top-right": "Atas kanan",
+  left: "Kiri",
+  right: "Kanan",
+  "bottom-left": "Bawah kiri",
+  "bottom-right": "Bawah kanan",
+};
+
+// Key diturunkan dari label (hindari import value dari data.ts di client bundle).
+const LINK_LAYOUT_KEYS = Object.keys(LINK_LAYOUT_LABELS) as LinkLayout[];
+const BUBBLE_STYLE_KEYS = Object.keys(BUBBLE_STYLE_LABELS) as BubbleStyle[];
+const BUBBLE_POSITION_KEYS = Object.keys(BUBBLE_POSITION_LABELS) as BubblePosition[];
+
 const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "name", label: "Nama" },
   { key: "handle", label: "Handle" },
@@ -104,6 +139,13 @@ export default function AdminPanel() {
   const [social, setSocial] = useState<Socials | null>(null);
   const [stack, setStack] = useState<StackItem[]>([]);
   const [stackAlign, setStackAlign] = useState<StackAlign>("right");
+  const [linkLayout, setLinkLayout] = useState<LinkLayout>("list");
+  const [bubble, setBubble] = useState<Bubble>({
+    enabled: false,
+    text: "",
+    style: "speech",
+    position: "top-right",
+  });
   const [sections, setSections] = useState<Sections>({ stack: true, team: true });
   const [team, setTeam] = useState<Member[]>([]);
   const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
@@ -147,6 +189,10 @@ export default function AdminPanel() {
       setSocial(d.social);
       setStack(d.stack || []);
       setStackAlign(d.stackAlign || "right");
+      setLinkLayout(d.linkLayout || "list");
+      setBubble(
+        d.bubble || { enabled: false, text: "", style: "speech", position: "top-right" }
+      );
       setSections(d.sections || { stack: true, team: true });
       setTeam(d.team || []);
       setLinkShape(d.linkShape || "rounded");
@@ -247,6 +293,8 @@ export default function AdminPanel() {
       if (patch.social) setSocial(d.social);
       if (patch.stack) setStack(d.stack);
       if (patch.stackAlign) setStackAlign(d.stackAlign);
+      if (patch.linkLayout) setLinkLayout(d.linkLayout);
+      if (patch.bubble) setBubble(d.bubble);
       if (patch.sections) setSections(d.sections);
       if (patch.team) setTeam(d.team);
       if (patch.linkShape) setLinkShape(d.linkShape);
@@ -741,29 +789,117 @@ export default function AdminPanel() {
         </Section>
 
         {/* BENTUK TOMBOL LINK */}
-        <Section title="Bentuk Tombol Link" sub="Gaya sudut tombol link di halaman publik">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {LINK_SHAPES.map((s) => {
-              const radius = { pill: 9999, rounded: 16, soft: 24, square: 10 }[s.key];
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => saveSettings({ linkShape: s.key })}
-                  className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition ${
-                    linkShape === s.key
-                      ? "border-violet-400/70 bg-violet-500/15"
-                      : "border-white/10 bg-white/5 hover:border-white/30"
-                  }`}
-                >
-                  <span
-                    className="h-8 w-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70"
-                    style={{ borderRadius: radius }}
-                  />
-                  <span className="text-xs text-white/70">{s.label}</span>
-                </button>
-              );
-            })}
+        <Section title="Gelembung Pesan" sub="Bubble teks di samping foto profil, tampil untuk semua orang">
+          <div className="space-y-4">
+            <label className="inline-flex items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={bubble.enabled}
+                onChange={(e) => saveSettings({ bubble: { ...bubble, enabled: e.target.checked } })}
+                className="h-4 w-4 accent-violet-500"
+              />
+              Tampilkan gelembung pesan
+            </label>
+
+            <Field label="Isi pesan">
+              <input
+                className={inputCls}
+                value={bubble.text}
+                maxLength={140}
+                placeholder="Contoh: Halo! Selamat datang"
+                onChange={(e) => setBubble({ ...bubble, text: e.target.value })}
+                onBlur={() => saveSettings({ bubble })}
+              />
+            </Field>
+
+            <Field label="Gaya bubble">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {BUBBLE_STYLE_KEYS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => saveSettings({ bubble: { ...bubble, style: k } })}
+                    className={`rounded-xl border px-3 py-2 text-sm transition ${
+                      bubble.style === k
+                        ? "border-violet-400/70 bg-violet-500/15 text-white"
+                        : "border-white/10 bg-white/5 text-white/50 hover:border-white/30"
+                    }`}
+                  >
+                    {BUBBLE_STYLE_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Posisi bubble">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {BUBBLE_POSITION_KEYS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => saveSettings({ bubble: { ...bubble, position: k } })}
+                    className={`rounded-xl border px-3 py-2 text-sm transition ${
+                      bubble.position === k
+                        ? "border-violet-400/70 bg-violet-500/15 text-white"
+                        : "border-white/10 bg-white/5 text-white/50 hover:border-white/30"
+                    }`}
+                  >
+                    {BUBBLE_POSITION_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <p className="text-xs text-white/35">
+              Warna bubble mengikuti aksen tema. Lihat hasilnya di Preview Halaman (klik “Muat ulang”).
+            </p>
+          </div>
+        </Section>
+
+        <Section title="Tampilan Link" sub="Gaya sudut + tata letak tombol link di halaman publik">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {LINK_SHAPES.map((s) => {
+                const radius = { pill: 9999, rounded: 16, soft: 24, square: 10 }[s.key];
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => saveSettings({ linkShape: s.key })}
+                    className={`flex flex-col items-center gap-2 rounded-xl border p-3 transition ${
+                      linkShape === s.key
+                        ? "border-violet-400/70 bg-violet-500/15"
+                        : "border-white/10 bg-white/5 hover:border-white/30"
+                    }`}
+                  >
+                    <span
+                      className="h-8 w-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70"
+                      style={{ borderRadius: radius }}
+                    />
+                    <span className="text-xs text-white/70">{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <Field label="Tata letak daftar link">
+              <div className="grid grid-cols-3 gap-2">
+                {LINK_LAYOUT_KEYS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => saveSettings({ linkLayout: k })}
+                    className={`rounded-xl border px-3 py-2.5 text-sm transition ${
+                      linkLayout === k
+                        ? "border-violet-400/70 bg-violet-500/15 text-white"
+                        : "border-white/10 bg-white/5 text-white/50 hover:border-white/30"
+                    }`}
+                  >
+                    {LINK_LAYOUT_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+            </Field>
           </div>
         </Section>
 

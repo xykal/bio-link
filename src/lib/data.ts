@@ -35,6 +35,55 @@ export type LinkShape = "pill" | "rounded" | "soft" | "square";
 // Perataan baris stack di halaman publik
 export type StackAlign = "left" | "center" | "right";
 
+// Gelembung pesan (bubble) di samping foto profil — tampil untuk semua orang.
+export type BubbleStyle =
+  | "speech"
+  | "pill"
+  | "glass"
+  | "neon"
+  | "outline"
+  | "gradient"
+  | "note"
+  | "badge";
+
+export type BubblePosition =
+  | "top-left"
+  | "top-right"
+  | "left"
+  | "right"
+  | "bottom-left"
+  | "bottom-right";
+
+export type Bubble = {
+  enabled: boolean;
+  text: string;
+  style: BubbleStyle;
+  position: BubblePosition;
+};
+
+// Tata letak daftar link di halaman publik
+export type LinkLayout = "list" | "grid" | "compact";
+
+export const BUBBLE_STYLES: BubbleStyle[] = [
+  "speech",
+  "pill",
+  "glass",
+  "neon",
+  "outline",
+  "gradient",
+  "note",
+  "badge",
+];
+export const BUBBLE_POSITIONS: BubblePosition[] = [
+  "top-left",
+  "top-right",
+  "left",
+  "right",
+  "bottom-left",
+  "bottom-right",
+];
+export const LINK_LAYOUTS: LinkLayout[] = ["list", "grid", "compact"];
+
 // Satu item tech stack / keahlian. path/hex/title disimpan penuh supaya
 // halaman publik tak perlu mem-bundle seluruh simple-icons (cukup render path).
 export type StackItem = {
@@ -121,6 +170,8 @@ export type Store = {
   theme: ThemeMode;
   linkShape: LinkShape;
   stackAlign: StackAlign;
+  linkLayout: LinkLayout;
+  bubble: Bubble;
   sections: Sections;
   branding: Branding;
 };
@@ -243,6 +294,13 @@ const DEFAULT_STORE: Store = {
   theme: "dark",
   linkShape: "rounded",
   stackAlign: "right",
+  linkLayout: "list",
+  bubble: {
+    enabled: true,
+    text: "Halo! Selamat datang",
+    style: "speech",
+    position: "top-right",
+  },
   sections: { stack: true, team: true },
   branding: { enabled: true, text: "Made by XySpace Tch" },
 };
@@ -313,6 +371,22 @@ export function normalize(parsed: Partial<Store>): Store {
     stackAlign: (["left", "center", "right"] as const).includes(parsed.stackAlign as never)
       ? (parsed.stackAlign as Store["stackAlign"])
       : "right",
+    linkLayout: LINK_LAYOUTS.includes(parsed.linkLayout as never)
+      ? (parsed.linkLayout as Store["linkLayout"])
+      : "list",
+    bubble: {
+      enabled: (parsed.bubble?.enabled ?? d.bubble.enabled) === true,
+      text:
+        typeof parsed.bubble?.text === "string"
+          ? parsed.bubble.text.slice(0, 140)
+          : d.bubble.text,
+      style: BUBBLE_STYLES.includes(parsed.bubble?.style as never)
+        ? (parsed.bubble!.style as BubbleStyle)
+        : d.bubble.style,
+      position: BUBBLE_POSITIONS.includes(parsed.bubble?.position as never)
+        ? (parsed.bubble!.position as BubblePosition)
+        : d.bubble.position,
+    },
     sections: {
       stack: parsed.sections?.stack !== false,
       team: parsed.sections?.team !== false,

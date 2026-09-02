@@ -50,6 +50,40 @@ export async function PATCH(req: Request) {
   if (["left", "center", "right"].includes(body.stackAlign)) {
     store.stackAlign = body.stackAlign;
   }
+  if (["list", "grid", "compact"].includes(body.linkLayout)) {
+    store.linkLayout = body.linkLayout;
+  }
+  if (body.bubble && typeof body.bubble === "object") {
+    store.bubble = {
+      enabled: body.bubble.enabled === true,
+      text:
+        typeof body.bubble.text === "string"
+          ? body.bubble.text.slice(0, 140)
+          : store.bubble.text,
+      style: [
+        "speech",
+        "pill",
+        "glass",
+        "neon",
+        "outline",
+        "gradient",
+        "note",
+        "badge",
+      ].includes(body.bubble.style)
+        ? body.bubble.style
+        : store.bubble.style,
+      position: [
+        "top-left",
+        "top-right",
+        "left",
+        "right",
+        "bottom-left",
+        "bottom-right",
+      ].includes(body.bubble.position)
+        ? body.bubble.position
+        : store.bubble.position,
+    };
+  }
   if (body.sections && typeof body.sections === "object") {
     store.sections = {
       stack: body.sections.stack !== false,
