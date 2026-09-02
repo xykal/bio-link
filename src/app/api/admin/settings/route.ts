@@ -47,6 +47,37 @@ export async function PATCH(req: Request) {
   if (["pill", "rounded", "soft", "square"].includes(body.linkShape)) {
     store.linkShape = body.linkShape;
   }
+  if (Array.isArray(body.stories)) {
+    store.stories = body.stories
+      .filter((s: { type?: unknown }) => s && (s.type === "image" || s.type === "text"))
+      .slice(0, 30)
+      .map(
+        (s: {
+          id?: string;
+          type: "image" | "text";
+          media?: string;
+          text?: string;
+          bg?: string;
+          duration?: number;
+          createdAt?: number;
+          likes?: number;
+          comments?: unknown;
+        }) => ({
+          id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
+          type: s.type === "text" ? "text" : "image",
+          media: typeof s.media === "string" ? s.media.slice(0, 500) : "",
+          text: typeof s.text === "string" ? s.text.slice(0, 280) : "",
+          bg: typeof s.bg === "string" ? s.bg.slice(0, 120) : "",
+          duration:
+            typeof s.duration === "number" && s.duration >= 1 && s.duration <= 30
+              ? Math.round(s.duration)
+              : 5,
+          createdAt: typeof s.createdAt === "number" ? s.createdAt : Date.now(),
+          likes: typeof s.likes === "number" && s.likes >= 0 ? Math.floor(s.likes) : 0,
+          comments: Array.isArray(s.comments) ? s.comments : [],
+        })
+      );
+  }
   if (["left", "center", "right"].includes(body.stackAlign)) {
     store.stackAlign = body.stackAlign;
   }
@@ -69,6 +100,8 @@ export async function PATCH(req: Request) {
         "gradient",
         "note",
         "badge",
+        "tiktok",
+        "instagram",
       ].includes(body.bubble.style)
         ? body.bubble.style
         : store.bubble.style,
@@ -82,6 +115,10 @@ export async function PATCH(req: Request) {
       ].includes(body.bubble.position)
         ? body.bubble.position
         : store.bubble.position,
+      color:
+        typeof body.bubble.color === "string"
+          ? body.bubble.color.slice(0, 32)
+          : store.bubble.color,
     };
   }
   if (body.sections && typeof body.sections === "object") {

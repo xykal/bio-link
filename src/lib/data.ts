@@ -44,7 +44,9 @@ export type BubbleStyle =
   | "outline"
   | "gradient"
   | "note"
-  | "badge";
+  | "badge"
+  | "tiktok"
+  | "instagram";
 
 export type BubblePosition =
   | "top-left"
@@ -59,6 +61,27 @@ export type Bubble = {
   text: string;
   style: BubbleStyle;
   position: BubblePosition;
+  color: string; // warna custom (hex). "" = ikut aksen tema
+};
+
+// Story ala IG: foto/teks singkat yang tampil di ring profil.
+export type StoryComment = {
+  id: string;
+  name: string;
+  text: string;
+  at: number; // timestamp ms
+};
+
+export type Story = {
+  id: string;
+  type: "image" | "text";
+  media: string; // url gambar (untuk type image)
+  text: string; // caption (image) atau isi teks (text)
+  bg: string; // warna/gradasi latar untuk story teks
+  duration: number; // detik per story
+  createdAt: number;
+  likes: number;
+  comments: StoryComment[];
 };
 
 // Tata letak daftar link di halaman publik
@@ -73,6 +96,8 @@ export const BUBBLE_STYLES: BubbleStyle[] = [
   "gradient",
   "note",
   "badge",
+  "tiktok",
+  "instagram",
 ];
 export const BUBBLE_POSITIONS: BubblePosition[] = [
   "top-left",
@@ -165,6 +190,7 @@ export type Store = {
   social: Socials;
   stack: StackItem[];
   team: Member[];
+  stories: Story[];
   fonts: FontsConfig;
   seo: SeoConfig;
   theme: ThemeMode;
@@ -300,7 +326,9 @@ const DEFAULT_STORE: Store = {
     text: "Halo! Selamat datang",
     style: "speech",
     position: "top-right",
+    color: "",
   },
+  stories: [],
   sections: { stack: true, team: true },
   branding: { enabled: true, text: "Made by XySpace Tch" },
 };
@@ -360,6 +388,35 @@ export function normalize(parsed: Partial<Store>): Store {
             url: typeof m.url === "string" ? m.url : "",
           }))
       : [...d.team],
+    stories: Array.isArray(parsed.stories)
+      ? parsed.stories
+          .filter((s) => s && (s.type === "image" || s.type === "text"))
+          .slice(0, 30)
+          .map((s) => ({
+            id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
+            type: s.type === "text" ? "text" : "image",
+            media: typeof s.media === "string" ? s.media.slice(0, 500) : "",
+            text: typeof s.text === "string" ? s.text.slice(0, 280) : "",
+            bg: typeof s.bg === "string" ? s.bg.slice(0, 120) : "",
+            duration:
+              typeof s.duration === "number" && s.duration >= 1 && s.duration <= 30
+                ? Math.round(s.duration)
+                : 5,
+            createdAt: typeof s.createdAt === "number" ? s.createdAt : Date.now(),
+            likes: typeof s.likes === "number" && s.likes >= 0 ? Math.floor(s.likes) : 0,
+            comments: Array.isArray(s.comments)
+              ? s.comments
+                  .filter((c) => c && typeof c.text === "string" && c.text.trim())
+                  .slice(0, 100)
+                  .map((c) => ({
+                    id: typeof c.id === "string" && c.id ? c.id : randomUUID(),
+                    name: typeof c.name === "string" ? c.name.slice(0, 40) : "Anon",
+                    text: c.text.slice(0, 200),
+                    at: typeof c.at === "number" ? c.at : Date.now(),
+                  }))
+              : [],
+          }))
+      : [],
     fonts: { ...d.fonts, ...(parsed.fonts || {}) },
     seo: { ...d.seo, ...(parsed.seo || {}) },
     theme: parsed.theme === "light" ? "light" : "dark",
@@ -386,6 +443,8 @@ export function normalize(parsed: Partial<Store>): Store {
       position: BUBBLE_POSITIONS.includes(parsed.bubble?.position as never)
         ? (parsed.bubble!.position as BubblePosition)
         : d.bubble.position,
+      color:
+        typeof parsed.bubble?.color === "string" ? parsed.bubble.color.slice(0, 32) : "",
     },
     sections: {
       stack: parsed.sections?.stack !== false,

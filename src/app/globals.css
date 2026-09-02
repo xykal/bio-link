@@ -115,6 +115,34 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* komentar story: muncul lalu melayang naik & memudar */
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-52px) scale(1);
+  }
+}
+.animate-float-up {
+  animation: float-up 4.2s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-up {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

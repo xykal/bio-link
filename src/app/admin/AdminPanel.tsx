@@ -15,6 +15,7 @@ import type {
   ProfileShape,
   StackItem,
   Member,
+  Story,
   LinkShape,
   StackAlign,
   Sections,
@@ -84,6 +85,8 @@ const BUBBLE_STYLE_LABELS: Record<BubbleStyle, string> = {
   gradient: "Gradient",
   note: "Note",
   badge: "Badge",
+  tiktok: "TikTok",
+  instagram: "Instagram",
 };
 
 const BUBBLE_POSITION_LABELS: Record<BubblePosition, string> = {
@@ -99,6 +102,55 @@ const BUBBLE_POSITION_LABELS: Record<BubblePosition, string> = {
 const LINK_LAYOUT_KEYS = Object.keys(LINK_LAYOUT_LABELS) as LinkLayout[];
 const BUBBLE_STYLE_KEYS = Object.keys(BUBBLE_STYLE_LABELS) as BubbleStyle[];
 const BUBBLE_POSITION_KEYS = Object.keys(BUBBLE_POSITION_LABELS) as BubblePosition[];
+
+// Sidebar: tiap kelompok punya "page" sendiri agar render ringan (tidak delay).
+type NavKey =
+  | "preview"
+  | "profil"
+  | "link"
+  | "stack"
+  | "story"
+  | "bubble"
+  | "tampilan"
+  | "data"
+  | "stats";
+
+const NAV: { key: NavKey; label: string; icon: string }[] = [
+  { key: "preview", label: "Preview", icon: "eye" },
+  { key: "profil", label: "Profil & Tema", icon: "user" },
+  { key: "link", label: "Link", icon: "link" },
+  { key: "stack", label: "Stack & Team", icon: "sliders" },
+  { key: "story", label: "Story", icon: "play" },
+  { key: "bubble", label: "Gelembung", icon: "message" },
+  { key: "tampilan", label: "Tampilan & SEO", icon: "image" },
+  { key: "data", label: "Data", icon: "database" },
+  { key: "stats", label: "Statistik", icon: "chart" },
+];
+
+const STORY_BGS = [
+  "linear-gradient(135deg,#8b5cf6,#ec4899)",
+  "linear-gradient(135deg,#0ea5e9,#22d3ee)",
+  "linear-gradient(135deg,#f97316,#ef4444)",
+  "linear-gradient(135deg,#10b981,#84cc16)",
+  "linear-gradient(135deg,#1e293b,#475569)",
+];
+
+type StatsResp = {
+  analytics: {
+    total: number;
+    byDay: Record<string, number>;
+    visits: { at: number; path: string; ref: string; ua: string }[];
+  };
+  server: {
+    node: string;
+    platform: string;
+    uptimeSec: number;
+    rssMB: number;
+    heapMB: number;
+    pid: number;
+    time: string;
+  };
+};
 
 const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "name", label: "Nama" },
@@ -145,8 +197,12 @@ export default function AdminPanel() {
     text: "",
     style: "speech",
     position: "top-right",
+    color: "",
   });
   const [sections, setSections] = useState<Sections>({ stack: true, team: true });
+  const [stories, setStories] = useState<Story[]>([]);
+  const [view, setView] = useState<NavKey>("profil");
+  const [stats, setStats] = useState<StatsResp | null>(null);
   const [team, setTeam] = useState<Member[]>([]);
   const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
@@ -191,10 +247,11 @@ export default function AdminPanel() {
       setStackAlign(d.stackAlign || "right");
       setLinkLayout(d.linkLayout || "list");
       setBubble(
-        d.bubble || { enabled: false, text: "", style: "speech", position: "top-right" }
+        d.bubble || { enabled: false, text: "", style: "speech", position: "top-right", color: "" }
       );
       setSections(d.sections || { stack: true, team: true });
       setTeam(d.team || []);
+      setStories(d.stories || []);
       setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
       setSeo(d.seo);
@@ -210,6 +267,57 @@ export default function AdminPanel() {
     const t = setTimeout(() => void loadData(), 0);
     return () => clearTimeout(t);
   }, [authed]);
+
+  // Ambil statistik (auto-refresh) saat membuka tab Statistik.
+  useEffect(() => {
+    if (!authed || view !== "stats") return;
+    let alive = true;
+    const pull = () =>
+      fetch("/api/admin/stats")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: StatsResp | null) => {
+          if (alive && d) setStats(d);
+        })
+        .catch(() => {});
+    pull();
+    const id = setInterval(pull, 15000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [authed, view]);
+
+  // ---- story helpers ----
+  function addStory(type: "image" | "text") {
+    const st: Story = {
+      id: crypto.randomUUID(),
+      type,
+      media: "",
+      text: type === "text" ? "Story baru" : "",
+      bg: STORY_BGS[0],
+      duration: 5,
+      createdAt: Date.now(),
+      likes: 0,
+      comments: [],
+    };
+    setStories((s) => [...s, st]);
+  }
+  function updateStory(id: string, patch: Partial<Story>) {
+    setStories((s) => s.map((st) => (st.id === id ? { ...st, ...patch } : st)));
+  }
+  function removeStory(id: string) {
+    setStories((s) => s.filter((st) => st.id !== id));
+  }
+  function moveStory(id: string, dir: -1 | 1) {
+    setStories((s) => {
+      const i = s.findIndex((x) => x.id === id);
+      const t = i + dir;
+      if (i < 0 || t < 0 || t >= s.length) return s;
+      const next = [...s];
+      [next[i], next[t]] = [next[t], next[i]];
+      return next;
+    });
+  }
 
   function flash(msg: string, ok = true) {
     setNotice({ msg, ok });
@@ -295,6 +403,7 @@ export default function AdminPanel() {
       if (patch.stackAlign) setStackAlign(d.stackAlign);
       if (patch.linkLayout) setLinkLayout(d.linkLayout);
       if (patch.bubble) setBubble(d.bubble);
+      if (patch.stories) setStories(d.stories);
       if (patch.sections) setSections(d.sections);
       if (patch.team) setTeam(d.team);
       if (patch.linkShape) setLinkShape(d.linkShape);
@@ -641,7 +750,50 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+      <div className="mx-auto flex max-w-6xl gap-6 px-4 py-8">
+        {/* SIDEBAR */}
+        <aside className="sticky top-20 hidden h-fit w-56 shrink-0 md:block">
+          <nav className="space-y-1 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+            {NAV.map((n) => (
+              <button
+                key={n.key}
+                type="button"
+                onClick={() => setView(n.key)}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition ${
+                  view === n.key
+                    ? "bg-gradient-to-r from-violet-500/25 to-fuchsia-500/25 text-white"
+                    : "text-white/55 hover:bg-white/5 hover:text-white/80"
+                }`}
+              >
+                <Icon name={n.icon} className="h-4 w-4" />
+                {n.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="min-w-0 flex-1 space-y-6">
+          {/* nav mobile */}
+          <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
+            {NAV.map((n) => (
+              <button
+                key={n.key}
+                type="button"
+                onClick={() => setView(n.key)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                  view === n.key
+                    ? "border-violet-400/60 bg-violet-500/15 text-white"
+                    : "border-white/10 bg-white/5 text-white/55"
+                }`}
+              >
+                <Icon name={n.icon} className="h-3.5 w-3.5" />
+                {n.label}
+              </button>
+            ))}
+          </div>
+
+          {view === "preview" && (
+            <>
         {/* PREVIEW LIVE */}
         <Section
           title="Preview Halaman"
@@ -660,11 +812,16 @@ export default function AdminPanel() {
               key={previewKey}
               src="/"
               title="Preview halaman bio"
-              className="h-[660px] w-full max-w-[380px] rounded-2xl border border-white/10"
+              className="h-[80vh] max-h-[900px] min-h-[620px] w-full max-w-[460px] rounded-2xl border border-white/10"
             />
           </div>
         </Section>
 
+            </>
+          )}
+
+          {view === "profil" && (
+            <>
         {/* THEME */}
         <Section title="Theme" sub="Mode gelap/terang + preset warna siap pakai">
           <div className="flex rounded-xl border border-white/10 p-1">
@@ -788,7 +945,12 @@ export default function AdminPanel() {
           )}
         </Section>
 
-        {/* BENTUK TOMBOL LINK */}
+            </>
+          )}
+
+          {view === "bubble" && (
+            <>
+        {/* GELEMBUNG PESAN */}
         <Section title="Gelembung Pesan" sub="Bubble teks di samping foto profil, tampil untuk semua orang">
           <div className="space-y-4">
             <label className="inline-flex items-center gap-2 text-sm text-white/70">
@@ -850,12 +1012,51 @@ export default function AdminPanel() {
               </div>
             </Field>
 
+            <Field label="Warna bubble">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70">
+                  <input
+                    type="color"
+                    value={bubble.color || profile?.accent || "#8b5cf6"}
+                    onChange={(e) => setBubble({ ...bubble, color: e.target.value })}
+                    onBlur={() => saveSettings({ bubble })}
+                    className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                  Pilih warna
+                </label>
+                {["#8b5cf6", "#ec4899", "#22d3ee", "#10b981", "#f97316", "#ef4444", "#ffffff", "#111111"].map(
+                  (c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => saveSettings({ bubble: { ...bubble, color: c } })}
+                      className="h-8 w-8 rounded-full border border-white/20 transition hover:scale-110"
+                      style={{ background: c }}
+                      aria-label={`Warna ${c}`}
+                    />
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => saveSettings({ bubble: { ...bubble, color: "" } })}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 hover:text-white"
+                >
+                  Ikut aksen
+                </button>
+              </div>
+            </Field>
+
             <p className="text-xs text-white/35">
-              Warna bubble mengikuti aksen tema. Lihat hasilnya di Preview Halaman (klik “Muat ulang”).
+              Warna dipakai untuk gaya umum (speech, pill, neon, dll). Gaya TikTok/Instagram punya warna khas sendiri. Lihat hasilnya di Preview Halaman (klik “Muat ulang”).
             </p>
           </div>
         </Section>
 
+            </>
+          )}
+
+          {view === "link" && (
+            <>
         <Section title="Tampilan Link" sub="Gaya sudut + tata letak tombol link di halaman publik">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1031,6 +1232,11 @@ export default function AdminPanel() {
           )}
         </Section>
 
+            </>
+          )}
+
+          {view === "stack" && (
+            <>
         {/* STACK / KEAHLIAN */}
         <Section
           title="Stack / Keahlian"
@@ -1222,6 +1428,176 @@ export default function AdminPanel() {
           </div>
         </Section>
 
+            </>
+          )}
+
+          {view === "story" && (
+            <>
+        <Section
+          title="Story"
+          sub="Story muncul di ring foto profil. Klik foto profil di halaman bio untuk menonton (full screen, bisa like & komen)."
+          right={
+            <div className="flex gap-2">
+              <button
+                onClick={() => addStory("image")}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              >
+                + Foto
+              </button>
+              <button
+                onClick={() => addStory("text")}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              >
+                + Teks
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3">
+            {stories.length === 0 && (
+              <p className="text-sm text-white/40">
+                Belum ada story. Tambah story foto atau teks di atas.
+              </p>
+            )}
+            {stories.map((st, i) => (
+              <div key={st.id} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="flex h-24 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 p-1 text-center text-[10px] font-semibold text-white"
+                    style={{
+                      background: st.type === "image" && st.media ? "#000" : st.bg || "#333",
+                    }}
+                  >
+                    {st.type === "image" && st.media ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={st.media} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="leading-tight">{st.text || "Story"}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {st.type === "image" ? (
+                      <>
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white">
+                          <Icon name="image" className="h-3.5 w-3.5" />
+                          {st.media ? "Ganti foto" : "Upload foto"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const url = await upload("bio-link/story", f);
+                              if (url) updateStory(st.id, { media: url });
+                            }}
+                          />
+                        </label>
+                        <input
+                          className={inputCls}
+                          value={st.text}
+                          placeholder="Caption (opsional)"
+                          maxLength={280}
+                          onChange={(e) => updateStory(st.id, { text: e.target.value })}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <textarea
+                          className={inputCls}
+                          value={st.text}
+                          rows={2}
+                          maxLength={280}
+                          placeholder="Tulis story teks..."
+                          onChange={(e) => updateStory(st.id, { text: e.target.value })}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {STORY_BGS.map((bg) => (
+                            <button
+                              key={bg}
+                              type="button"
+                              onClick={() => updateStory(st.id, { bg })}
+                              className={`h-7 w-7 rounded-full border ${
+                                st.bg === bg ? "border-white" : "border-white/20"
+                              }`}
+                              style={{ background: bg }}
+                              aria-label="Warna latar story"
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/45">
+                      <label className="flex items-center gap-1.5">
+                        Durasi
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={st.duration}
+                          onChange={(e) =>
+                            updateStory(st.id, {
+                              duration: Math.max(1, Math.min(30, Number(e.target.value) || 5)),
+                            })
+                          }
+                          className="w-16 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-white"
+                        />
+                        dtk
+                      </label>
+                      <span className="inline-flex items-center gap-1">
+                        {st.likes} like
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        {st.comments?.length || 0} komen
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1">
+                    <button
+                      onClick={() => moveStory(st.id, -1)}
+                      disabled={i === 0}
+                      className="rounded-md border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                      aria-label="Naik"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => moveStory(st.id, 1)}
+                      disabled={i === stories.length - 1}
+                      className="rounded-md border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                      aria-label="Turun"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={() => removeStory(st.id)}
+                      className="rounded-md border border-rose-500/30 px-2 py-1 text-xs text-rose-300"
+                      aria-label="Hapus story"
+                    >
+                      <Icon name="delete" className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button onClick={() => saveSettings({ stories })} disabled={saveBusy} className={btnCls}>
+                Simpan Story
+              </button>
+              <button
+                onClick={() => setPreviewKey((k) => k + 1)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/70 transition hover:text-white"
+              >
+                Refresh preview
+              </button>
+            </div>
+          </div>
+        </Section>
+            </>
+          )}
+
+          {view === "tampilan" && (
+            <>
         {/* FONTS */}
         <Section title="Gaya Font" sub="Font tiap elemen teks di halaman">
           {fonts && (
@@ -1286,6 +1662,83 @@ export default function AdminPanel() {
           )}
         </Section>
 
+            </>
+          )}
+
+          {view === "stats" && (
+            <>
+        <Section title="Statistik Pengunjung" sub="Total kunjungan, aktivitas harian, info server, dan riwayat.">
+          {!stats ? (
+            <p className="text-sm text-white/40">Memuat statistik...</p>
+          ) : (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard label="Total kunjungan" value={stats.analytics.total} />
+                <StatCard label="Hari ini" value={todayCount(stats.analytics.byDay)} />
+                <StatCard label="7 hari terakhir" value={last7Total(stats.analytics.byDay)} />
+                <StatCard label="Jumlah story" value={stories.length} />
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-white/80">Grafik 7 hari</p>
+                <WeekChart byDay={stats.analytics.byDay} />
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-white/80">Info server</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <InfoRow label="Node" value={stats.server.node} />
+                  <InfoRow label="Platform" value={stats.server.platform} />
+                  <InfoRow
+                    label="Uptime"
+                    value={`${Math.floor(stats.server.uptimeSec / 60)}m ${stats.server.uptimeSec % 60}s`}
+                  />
+                  <InfoRow label="Memori (RSS)" value={`${stats.server.rssMB} MB`} />
+                  <InfoRow label="Heap terpakai" value={`${stats.server.heapMB} MB`} />
+                  <InfoRow label="PID" value={String(stats.server.pid)} />
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-white/80">Riwayat kunjungan terbaru</p>
+                <div className="max-h-64 overflow-auto rounded-xl border border-white/10">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-black/50 text-white/50">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Waktu</th>
+                        <th className="px-3 py-2 font-medium">Referrer</th>
+                        <th className="px-3 py-2 font-medium">User agent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.analytics.visits.slice(0, 50).map((v, i) => (
+                        <tr key={i} className="border-t border-white/5">
+                          <td className="whitespace-nowrap px-3 py-2 text-white/60">
+                            {new Date(v.at).toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-3 py-2 text-white/50">{v.ref ? shortHost(v.ref) : "—"}</td>
+                          <td className="max-w-[240px] truncate px-3 py-2 text-white/40">{v.ua || "—"}</td>
+                        </tr>
+                      ))}
+                      {stats.analytics.visits.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-4 text-center text-white/40">
+                            Belum ada kunjungan tercatat.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </Section>
+            </>
+          )}
+
+          {view === "data" && (
+            <>
         <Section title="Data" sub="Backup, restore, dan reset seluruh isi panel">
           <div className="flex flex-wrap gap-3">
             <button
@@ -1336,15 +1789,86 @@ export default function AdminPanel() {
             )}
           </div>
           <p className="mt-3 text-xs text-white/35">
-            Backup berisi seluruh pengaturan, link, stack, dan team. Mengimpor backup akan menimpa data saat ini.
+            Backup berisi seluruh pengaturan, link, stack, team, dan story. Mengimpor backup akan menimpa data saat ini.
           </p>
         </Section>
+            </>
+          )}
+        </div>
       </div>
     </main>
   );
 }
 
 /* ================= UI primitives ================= */
+
+function last7series(byDay: Record<string, number>) {
+  const out: { key: string; label: string; count: number }[] = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400000);
+    const key = d.toISOString().slice(0, 10);
+    out.push({
+      key,
+      label: d.toLocaleDateString("id-ID", { weekday: "short" }),
+      count: byDay[key] || 0,
+    });
+  }
+  return out;
+}
+function todayCount(byDay: Record<string, number>) {
+  return byDay[new Date().toISOString().slice(0, 10)] || 0;
+}
+function last7Total(byDay: Record<string, number>) {
+  return last7series(byDay).reduce((a, b) => a + b.count, 0);
+}
+function shortHost(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url.slice(0, 40);
+  }
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+      <p className="text-xs text-white/45">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+      <p className="text-[11px] text-white/40">{label}</p>
+      <p className="truncate text-sm text-white/80">{value}</p>
+    </div>
+  );
+}
+
+function WeekChart({ byDay }: { byDay: Record<string, number> }) {
+  const series = last7series(byDay);
+  const max = Math.max(1, ...series.map((s) => s.count));
+  return (
+    <div className="flex items-end gap-2">
+      {series.map((d) => (
+        <div key={d.key} className="flex flex-1 flex-col items-center gap-1">
+          <div className="flex h-24 w-full items-end">
+            <div
+              className="w-full rounded-t bg-gradient-to-t from-violet-500 to-fuchsia-500"
+              style={{ height: `${Math.max(4, Math.round((d.count / max) * 100))}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-white/40">{d.label}</span>
+          <span className="text-[10px] text-white/60">{d.count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 const inputCls =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-white placeholder-white/30 outline-none transition focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/20";

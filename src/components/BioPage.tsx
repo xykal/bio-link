@@ -12,6 +12,7 @@ type PublicData = {
   social: Store["social"];
   stack: Store["stack"];
   team: Store["team"];
+  stories: Store["stories"];
   fonts: Store["fonts"];
   theme: "dark" | "light";
   linkShape: Store["linkShape"];
@@ -49,6 +50,7 @@ function toPublic(s: Store): PublicData {
     social: s.social,
     stack: s.stack || [],
     team: s.team || [],
+    stories: s.stories || [],
     fonts: s.fonts,
     theme: s.theme,
     linkShape: s.linkShape || "rounded",
@@ -191,6 +193,30 @@ function bubbleVisual(
         maxWidth: side ? 120 : 150,
         showTail: false,
       };
+    case "tiktok":
+      return {
+        ...base,
+        boxStyle: {
+          background: "#010101",
+          color: "#fff",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.14)",
+          boxShadow: "2px 2px 0 #25f4ee, -2px -2px 0 #fe2c55",
+        },
+        showTail: false,
+      };
+    case "instagram":
+      return {
+        ...base,
+        boxClass: "shadow-lg",
+        boxStyle: {
+          background:
+            "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+          color: "#fff",
+          borderRadius: 14,
+        },
+        tailColor: "#dc2743",
+      };
     case "speech":
     default:
       return {
@@ -211,7 +237,8 @@ function ProfileBubble({
   isLight: boolean;
 }) {
   const position = bubble.position;
-  const v = bubbleVisual(bubble.style, accent, isLight, position);
+  const color = bubble.color || accent;
+  const v = bubbleVisual(bubble.style, color, isLight, position);
   return (
     <div
       className={`pointer-events-none absolute z-20 ${BUBBLE_ANCHOR[position]}`}
@@ -242,6 +269,15 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const [failed, setFailed] = useState(false);
   const [gateLink, setGateLink] = useState<LinkItem | null>(null);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
+
+  // Story viewer
+  const [storyIndex, setStoryIndex] = useState<number | null>(null);
+  const [storyProgress, setStoryProgress] = useState(0);
+  const [likeMap, setLikeMap] = useState<Record<string, number>>({});
+  const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
+  const [commentText, setCommentText] = useState("");
+  const [commentName, setCommentName] = useState("");
+  const [floating, setFloating] = useState<{ key: string; name: string; text: string }[]>([]);
 
   // Semua setState terjadi di callback promise (asinkron) -> aman untuk aturan
   // react-hooks/set-state-in-effect (React Compiler, Next 16).
@@ -282,6 +318,97 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     document.head.appendChild(s);
   }, [rulesOrigin]);
 
+  // Hitung kunjungan sekali per buka halaman.
+  useEffect(() => {
+    fetch("/api/track", { method: "POST" }).catch(() => {});
+  }, []);
+
+  // Timer progres story: isi bar lalu lanjut ke story berikutnya.
+  useEffect(() => {
+    if (storyIndex === null) return;
+    const list = data?.stories || [];
+    const story = list[storyIndex];
+    if (!story) {
+      return;
+    }
+    const dur = Math.max(1, story.duration || 5) * 1000;
+    let elapsed = 0;
+    const stepMs = 100;
+    const id = setInterval(() => {
+      elapsed += stepMs;
+      setStoryProgress(Math.min(100, (elapsed / dur) * 100));
+      if (elapsed >= dur) {
+        clearInterval(id);
+        setStoryProgress(0);
+        setStoryIndex((cur) =>
+          cur === null ? null : cur + 1 < list.length ? cur + 1 : null
+        );
+      }
+    }, stepMs);
+    return () => clearInterval(id);
+  }, [storyIndex, data]);
+
+  function closeStory() {
+    setStoryIndex(null);
+    setStoryProgress(0);
+    setFloating([]);
+  }
+  function gotoStory(i: number) {
+    if (i < 0) return;
+    if (i >= stories.length) {
+      closeStory();
+      return;
+    }
+    setStoryProgress(0);
+    setStoryIndex(i);
+  }
+  function openStory() {
+    setStoryProgress(0);
+    setStoryIndex(0);
+  }
+  async function likeStory(id: string) {
+    if (likedSet[id]) return;
+    const base = likeMap[id] ?? stories.find((s) => s.id === id)?.likes ?? 0;
+    setLikedSet((s) => ({ ...s, [id]: true }));
+    setLikeMap((m) => ({ ...m, [id]: base + 1 }));
+    try {
+      const r = await fetch("/api/story/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyId: id }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (typeof d.likes === "number") setLikeMap((m) => ({ ...m, [id]: d.likes }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  function pushFloating(name: string, text: string) {
+    const key = crypto.randomUUID();
+    setFloating((f) => [...f.slice(-3), { key, name, text }]);
+    setTimeout(() => setFloating((f) => f.filter((x) => x.key !== key)), 4200);
+  }
+  async function sendComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeStory) return;
+    const text = commentText.trim();
+    if (!text) return;
+    const name = commentName.trim() || "Anon";
+    setCommentText("");
+    pushFloating(name, text);
+    try {
+      await fetch("/api/story/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyId: activeStory.id, name, text }),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
   function handleClick(e: React.MouseEvent, link: LinkItem) {
     if (link.gate !== "rules") return;
     e.preventDefault();
@@ -311,6 +438,9 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const bubble = data?.bubble;
   const showBubble = !!bubble?.enabled && !!bubble.text?.trim();
   const layout = data?.linkLayout || "list";
+  const stories = data?.stories || [];
+  const hasStories = stories.length > 0;
+  const activeStory = storyIndex !== null ? stories[storyIndex] : null;
   const stackJustify =
     data?.stackAlign === "left"
       ? "justify-start"
@@ -389,17 +519,31 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               }
               style={{ width: 108, height: 108 }}
             >
+              {/* Ring story ala IG: muncul hanya kalau ada story */}
+              {hasStories && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -inset-[3px] rounded-full"
+                  style={{
+                    background:
+                      "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+                  }}
+                />
+              )}
               {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
               <div
-                className={`avatar-frame shape-${shape} h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
-                onClick={() => setShowAvatarPreview((v) => !v)}
+                className={`avatar-frame shape-${shape} relative h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
+                onClick={() =>
+                  hasStories ? openStory() : setShowAvatarPreview((v) => !v)
+                }
                 role="button"
                 tabIndex={0}
-                aria-label="Lihat foto profil"
+                aria-label={hasStories ? "Lihat story" : "Lihat foto profil"}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    setShowAvatarPreview((v) => !v);
+                    if (hasStories) openStory();
+                    else setShowAvatarPreview((v) => !v);
                   }
                 }}
                 onContextMenu={(e) => e.preventDefault()}
@@ -737,22 +881,176 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
 
           <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
-            <div className="h-72 w-72 overflow-hidden rounded-full bg-black/40 shadow-2xl">
-              {profile?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={optImg(profile.avatar, { w: 600, h: 600, crop: "fill" })}
-                  alt={profile.name}
-                  className="h-full w-full object-cover"
-                  style={{ objectPosition: avatarPos }}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
-                  {(profile?.name || "?").charAt(0).toUpperCase()}
-                </div>
+            <div className="relative">
+              <div className="h-72 w-72 overflow-hidden rounded-full bg-black/40 shadow-2xl">
+                {profile?.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={optImg(profile.avatar, { w: 600, h: 600, crop: "fill" })}
+                    alt={profile.name}
+                    className="h-full w-full object-cover"
+                    style={{ objectPosition: avatarPos }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
+                    {(profile?.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              {showBubble && bubble && (
+                <ProfileBubble bubble={bubble} accent={accent} isLight={false} />
               )}
             </div>
             <p className="mt-3 text-center text-xs text-white/40">Klik di mana saja untuk menutup</p>
+          </div>
+        </div>
+      )}
+
+      {/* STORY VIEWER (full): klik foto profil saat ada story */}
+      {storyIndex !== null && activeStory && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative h-full w-full max-w-md overflow-hidden bg-black sm:h-[92vh] sm:rounded-2xl">
+            {/* bar progres per story */}
+            <div className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-2">
+              {stories.map((s, i) => (
+                <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/25">
+                  <div
+                    className="h-full bg-white"
+                    style={{
+                      width:
+                        i < (storyIndex ?? 0)
+                          ? "100%"
+                          : i === storyIndex
+                            ? `${storyProgress}%`
+                            : "0%",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* tutup */}
+            <button
+              onClick={closeStory}
+              className="absolute right-3 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
+              aria-label="Tutup story"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* konten story */}
+            {activeStory.type === "image" && activeStory.media ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={activeStory.media}
+                alt={activeStory.text || "story"}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <div
+                className="absolute inset-0 flex items-center justify-center p-8 text-center"
+                style={{
+                  background:
+                    activeStory.bg || `linear-gradient(135deg, ${accent}, ${accent}88)`,
+                }}
+              >
+                <p
+                  className="text-2xl font-bold leading-snug text-white drop-shadow"
+                  style={{ fontFamily: "var(--font-name)" }}
+                >
+                  {activeStory.text}
+                </p>
+              </div>
+            )}
+
+            {/* zona tap: kiri = sebelumnya, kanan = berikutnya */}
+            <button
+              className="absolute left-0 top-0 z-10 h-full w-1/3"
+              onClick={() => gotoStory((storyIndex ?? 0) - 1)}
+              aria-label="Story sebelumnya"
+            />
+            <button
+              className="absolute right-0 top-0 z-10 h-full w-2/3"
+              onClick={() => gotoStory((storyIndex ?? 0) + 1)}
+              aria-label="Story berikutnya"
+            />
+
+            {/* komentar melayang di kanan-bawah */}
+            <div className="pointer-events-none absolute bottom-24 right-3 z-20 flex w-48 flex-col items-end gap-1.5">
+              {floating.map((c) => (
+                <div
+                  key={c.key}
+                  className="animate-float-up max-w-full rounded-2xl rounded-br-sm bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
+                >
+                  <span className="font-semibold text-white/90">{c.name}</span>{" "}
+                  <span className="text-white/80">{c.text}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* kontrol bawah: like + komentar */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/85 to-transparent p-3 pt-8">
+              {activeStory.type === "image" && activeStory.text && (
+                <p
+                  className="mb-2 text-sm font-medium text-white drop-shadow"
+                  style={{ fontFamily: "var(--font-bio)" }}
+                >
+                  {activeStory.text}
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <form onSubmit={sendComment} className="flex flex-1 items-center gap-2">
+                  <input
+                    value={commentName}
+                    onChange={(e) => setCommentName(e.target.value)}
+                    placeholder="Nama"
+                    maxLength={40}
+                    className="w-20 shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder-white/40 outline-none focus:border-white/40"
+                  />
+                  <input
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Tulis komentar..."
+                    maxLength={200}
+                    className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-white/40"
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-full bg-white/15 px-3 py-2 text-white hover:bg-white/25"
+                    aria-label="Kirim komentar"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="m22 2-7 20-4-9-9-4Z" />
+                      <path d="M22 2 11 13" />
+                    </svg>
+                  </button>
+                </form>
+                <button
+                  onClick={() => likeStory(activeStory.id)}
+                  className="flex shrink-0 flex-col items-center text-white"
+                  aria-label="Suka"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className={`h-7 w-7 ${likedSet[activeStory.id] ? "text-rose-500" : "text-white"}`}
+                    fill={likedSet[activeStory.id] ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                  </svg>
+                  <span className="text-[11px] font-semibold">
+                    {likeMap[activeStory.id] ?? activeStory.likes}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
