@@ -41,8 +41,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local data store
-data/
+# local data store (hanya folder data/ di root, JANGAN src/app/api/data/)
+/data/
 .env*
 
 # keep the example env tracked
