@@ -9,8 +9,9 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          // Halaman bio tidak perlu di-embed; DENY menutup vektor clickjacking.
-          { key: "X-Frame-Options", value: "DENY" },
+          // SAMEORIGIN: blokir clickjacking lintas-origin, tapi izinkan panel
+          // admin (origin sama) meng-embed halaman untuk preview live.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
       },
     ];

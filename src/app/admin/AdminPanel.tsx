@@ -16,6 +16,7 @@ import type {
   StackItem,
   Member,
   LinkShape,
+  StackAlign,
 } from "@/lib/data";
 
 const SHAPES: { key: ProfileShape; label: string }[] = [
@@ -57,6 +58,12 @@ const LINK_SHAPES: { key: LinkShape; label: string }[] = [
   { key: "square", label: "Square" },
 ];
 
+const STACK_ALIGNS: { key: StackAlign; label: string }[] = [
+  { key: "left", label: "Kiri" },
+  { key: "center", label: "Tengah" },
+  { key: "right", label: "Kanan" },
+];
+
 const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "name", label: "Nama" },
   { key: "handle", label: "Handle" },
@@ -95,6 +102,7 @@ export default function AdminPanel() {
   const [profile, setProfile] = useState<Store["profile"] | null>(null);
   const [social, setSocial] = useState<Socials | null>(null);
   const [stack, setStack] = useState<StackItem[]>([]);
+  const [stackAlign, setStackAlign] = useState<StackAlign>("right");
   const [team, setTeam] = useState<Member[]>([]);
   const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
@@ -112,6 +120,7 @@ export default function AdminPanel() {
     kind: "link",
   });
   const [saveBusy, setSaveBusy] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -134,6 +143,7 @@ export default function AdminPanel() {
       setProfile(d.profile);
       setSocial(d.social);
       setStack(d.stack || []);
+      setStackAlign(d.stackAlign || "right");
       setTeam(d.team || []);
       setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
@@ -232,6 +242,7 @@ export default function AdminPanel() {
       setStore(d);
       if (patch.social) setSocial(d.social);
       if (patch.stack) setStack(d.stack);
+      if (patch.stackAlign) setStackAlign(d.stackAlign);
       if (patch.team) setTeam(d.team);
       if (patch.linkShape) setLinkShape(d.linkShape);
       if (patch.seo) setSeo(d.seo);
@@ -305,7 +316,12 @@ export default function AdminPanel() {
   // ---- stack helpers ----
   function addStack(slug: string) {
     if (stack.some((s) => s.slug === slug)) return;
-    setStack([...stack, { id: crypto.randomUUID(), slug }]);
+    const ic = getTechIcon(slug);
+    if (!ic) return;
+    setStack([
+      ...stack,
+      { id: crypto.randomUUID(), slug: ic.slug, title: ic.title, hex: ic.hex, path: ic.path },
+    ]);
   }
   function removeStack(id: string) {
     setStack(stack.filter((s) => s.id !== id));
@@ -519,6 +535,29 @@ export default function AdminPanel() {
       )}
 
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+        {/* PREVIEW LIVE */}
+        <Section
+          title="Preview Halaman"
+          sub="Pratinjau langsung halaman bio sesuai data tersimpan."
+          right={
+            <button
+              onClick={() => setPreviewKey((k) => k + 1)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+            >
+              <Icon name="refresh" className="h-3.5 w-3.5" /> Muat ulang
+            </button>
+          }
+        >
+          <div className="flex justify-center rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-5">
+            <iframe
+              key={previewKey}
+              src="/"
+              title="Preview halaman bio"
+              className="h-[660px] w-full max-w-[380px] rounded-2xl border border-white/10"
+            />
+          </div>
+        </Section>
+
         {/* THEME */}
         <Section title="Theme" sub="Mode gelap/terang + preset warna siap pakai">
           <div className="flex rounded-xl border border-white/10 p-1">
@@ -804,6 +843,23 @@ export default function AdminPanel() {
           right={<span className="text-sm text-white/40">{stack.length} dipilih</span>}
         >
           <div className="space-y-4">
+            <Field label="Posisi stack di halaman">
+              <div className="flex rounded-xl border border-white/10 p-1">
+                {STACK_ALIGNS.map((a) => (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => saveSettings({ stackAlign: a.key })}
+                    className={`flex-1 rounded-lg px-3 py-1.5 text-sm transition ${
+                      stackAlign === a.key ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             {stack.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {stack.map((s, i) => {

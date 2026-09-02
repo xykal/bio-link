@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { getTechIcon } from "./stackIcons";
 
 export type LinkItem = {
   id: string;
@@ -31,10 +32,17 @@ export type ProfileShape =
 // Bentuk tombol link di halaman publik
 export type LinkShape = "pill" | "rounded" | "soft" | "square";
 
-// Satu item tech stack / keahlian (logo asli via simple-icons slug)
+// Perataan baris stack di halaman publik
+export type StackAlign = "left" | "center" | "right";
+
+// Satu item tech stack / keahlian. path/hex/title disimpan penuh supaya
+// halaman publik tak perlu mem-bundle seluruh simple-icons (cukup render path).
 export type StackItem = {
   id: string;
   slug: string; // simple-icons slug, mis. "flutter"
+  title: string; // nama tampil, mis. "Flutter"
+  hex: string; // warna asli logo, mis. "02569B"
+  path: string; // SVG path data (viewBox 0 0 24 24)
 };
 
 // Anggota team / kontributor
@@ -106,6 +114,7 @@ export type Store = {
   seo: SeoConfig;
   theme: ThemeMode;
   linkShape: LinkShape;
+  stackAlign: StackAlign;
   branding: Branding;
 };
 
@@ -119,6 +128,19 @@ const useD1 = Boolean(CF_ACCOUNT && CF_DB && CF_TOKEN);
 
 const TABLE = "store";
 const ROW_ID = 1;
+
+// Bangun StackItem lengkap dari slug (server-side; pakai simple-icons).
+function makeStack(slug: string): StackItem | null {
+  const ic = getTechIcon(slug);
+  return ic
+    ? { id: randomUUID(), slug: ic.slug, title: ic.title, hex: ic.hex, path: ic.path }
+    : null;
+}
+
+const DEFAULT_STACK_SLUGS = [
+  "flutter", "dart", "kotlin", "android", "nextdotjs",
+  "react", "typescript", "vite", "tailwindcss", "nodedotjs",
+];
 
 const DEFAULT_STORE: Store = {
   profile: {
@@ -191,18 +213,7 @@ const DEFAULT_STORE: Store = {
     discord: "",
     website: "https://haekal.web.id",
   },
-  stack: [
-    { id: randomUUID(), slug: "flutter" },
-    { id: randomUUID(), slug: "dart" },
-    { id: randomUUID(), slug: "kotlin" },
-    { id: randomUUID(), slug: "android" },
-    { id: randomUUID(), slug: "nextdotjs" },
-    { id: randomUUID(), slug: "react" },
-    { id: randomUUID(), slug: "typescript" },
-    { id: randomUUID(), slug: "vite" },
-    { id: randomUUID(), slug: "tailwindcss" },
-    { id: randomUUID(), slug: "nodedotjs" },
-  ],
+  stack: DEFAULT_STACK_SLUGS.map(makeStack).filter((x): x is StackItem => x !== null),
   team: [
     { id: randomUUID(), name: "Haekal", role: "Founder", avatar: "", url: "https://github.com/xykalnotkel" },
     { id: randomUUID(), name: "XySpace", role: "Team", avatar: "", url: "" },
@@ -224,6 +235,7 @@ const DEFAULT_STORE: Store = {
   },
   theme: "dark",
   linkShape: "rounded",
+  stackAlign: "right",
   branding: { enabled: true, text: "Made by XySpace Tch" },
 };
 
@@ -257,8 +269,19 @@ function normalize(parsed: Partial<Store>): Store {
     social: { ...d.social, ...(parsed.social || {}) },
     stack: Array.isArray(parsed.stack)
       ? parsed.stack
-          .filter((s) => s && typeof s.slug === "string" && s.slug.trim())
-          .map((s) => ({ id: s.id || randomUUID(), slug: s.slug.trim() }))
+          .map((s) => {
+            const slug = typeof s?.slug === "string" ? s.slug.trim() : "";
+            const ic = getTechIcon(slug);
+            if (!ic) return null;
+            return {
+              id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
+              slug: ic.slug,
+              title: ic.title,
+              hex: ic.hex,
+              path: ic.path,
+            };
+          })
+          .filter((x): x is StackItem => x !== null)
       : [...d.stack],
     team: Array.isArray(parsed.team)
       ? parsed.team
@@ -279,6 +302,9 @@ function normalize(parsed: Partial<Store>): Store {
     )
       ? (parsed.linkShape as Store["linkShape"])
       : "rounded",
+    stackAlign: (["left", "center", "right"] as const).includes(parsed.stackAlign as never)
+      ? (parsed.stackAlign as Store["stackAlign"])
+      : "right",
     branding: { ...d.branding, ...(parsed.branding || {}) },
   };
 }

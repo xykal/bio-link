@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { readStore, writeStore } from "@/lib/data";
 import { isAuthenticated } from "@/lib/auth";
+import { getTechIcon } from "@/lib/stackIcons";
 
 // PATCH individual setting groups: social, seo, fonts, theme, branding
 export async function PATCH(req: Request) {
@@ -16,12 +17,20 @@ export async function PATCH(req: Request) {
   }
   if (Array.isArray(body.stack)) {
     store.stack = body.stack
-      .filter((s: { slug?: unknown }) => s && typeof s.slug === "string" && s.slug.trim())
       .slice(0, 40)
-      .map((s: { id?: string; slug: string }) => ({
-        id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
-        slug: s.slug.trim().slice(0, 40),
-      }));
+      .map((s: { id?: string; slug?: unknown }) => {
+        const slug = typeof s.slug === "string" ? s.slug.trim() : "";
+        const ic = getTechIcon(slug);
+        if (!ic) return null;
+        return {
+          id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
+          slug: ic.slug,
+          title: ic.title,
+          hex: ic.hex,
+          path: ic.path,
+        };
+      })
+      .filter((x: unknown): x is NonNullable<typeof x> => x !== null);
   }
   if (Array.isArray(body.team)) {
     store.team = body.team
@@ -37,6 +46,9 @@ export async function PATCH(req: Request) {
   }
   if (["pill", "rounded", "soft", "square"].includes(body.linkShape)) {
     store.linkShape = body.linkShape;
+  }
+  if (["left", "center", "right"].includes(body.stackAlign)) {
+    store.stackAlign = body.stackAlign;
   }
   if (body.seo && typeof body.seo === "object") {
     store.seo = { ...store.seo, ...body.seo };

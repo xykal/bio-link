@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
-import { getTechIcon } from "@/lib/stackIcons";
 import type { LinkItem, Store } from "@/lib/data";
 
 type PublicData = {
@@ -16,6 +15,7 @@ type PublicData = {
   fonts: Store["fonts"];
   theme: "dark" | "light";
   linkShape: Store["linkShape"];
+  stackAlign: Store["stackAlign"];
   branding: Store["branding"];
   rulesUrl: string;
 };
@@ -49,6 +49,7 @@ function toPublic(s: Store): PublicData {
     fonts: s.fonts,
     theme: s.theme,
     linkShape: s.linkShape || "rounded",
+    stackAlign: s.stackAlign || "right",
     branding: s.branding,
     rulesUrl: s.seo.rulesUrl,
   };
@@ -141,6 +142,12 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const ringColor = isLight ? "#f7f7f9" : "#08080d";
   const stack = data?.stack || [];
   const team = data?.team || [];
+  const stackJustify =
+    data?.stackAlign === "left"
+      ? "justify-start"
+      : data?.stackAlign === "center"
+        ? "justify-center"
+        : "justify-end";
 
   const cssVars = useMemo(
     () =>
@@ -204,16 +211,12 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               </div>
             ) : null}
 
-            {/* Avatar: tanpa ring berwarna — hanya bingkai netral halus */}
+            {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
             <div
-              className={`avatar-frame shape-${shape} absolute left-1/2 flex -translate-x-1/2 cursor-pointer items-center justify-center p-[3px] shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none ${
+              className={`avatar-frame shape-${shape} absolute left-1/2 -translate-x-1/2 cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none ${
                 profile?.banner ? "-bottom-10" : "relative"
               }`}
-              style={{
-                background: isLight ? "#e6e6ec" : "rgba(255,255,255,0.10)",
-                width: 108,
-                height: 108,
-              }}
+              style={{ width: 108, height: 108 }}
               onClick={() => setShowAvatarPreview((v) => !v)}
               role="button"
               tabIndex={0}
@@ -227,34 +230,28 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => e.preventDefault()}
             >
-              <div
-                className={`shape-${shape} h-full w-full overflow-hidden ${
-                  isLight ? "bg-white" : "bg-[#111118]"
-                }`}
-              >
-                {profile?.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
-                    alt={profile.name}
-                    decoding="async"
-                    fetchPriority="high"
-                    className="h-full w-full object-cover"
-                    style={{ objectPosition: avatarPos }}
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center text-4xl font-bold"
-                    style={{
-                      fontFamily: "var(--font-name)",
-                      background: isLight ? "#ececf1" : "#1b1b25",
-                      color: isLight ? "#a1a1aa" : "#4b4b5a",
-                    }}
-                  >
-                    {(profile?.name || "?").charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
+              {profile?.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={optImg(profile.avatar, { w: 400, h: 400, crop: "fill" })}
+                  alt={profile.name}
+                  decoding="async"
+                  fetchPriority="high"
+                  className="h-full w-full object-cover"
+                  style={{ objectPosition: avatarPos }}
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-4xl font-bold"
+                  style={{
+                    fontFamily: "var(--font-name)",
+                    background: isLight ? "#ececf1" : "#1b1b25",
+                    color: isLight ? "#a1a1aa" : "#4b4b5a",
+                  }}
+                >
+                  {(profile?.name || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -277,17 +274,16 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </p>
           )}
 
-          {/* STACK / KEAHLIAN: logo asli, sejajar kanan, tumpuk-tindih setengah */}
+          {/* STACK / KEAHLIAN: logo asli (warna brand), posisi bisa kiri/tengah/kanan, tumpuk-tindih setengah */}
           {stack.length > 0 && (
-            <div className="mt-5 flex w-full items-center justify-end" aria-label="Tech stack">
+            <div className={`mt-5 flex w-full items-center ${stackJustify}`} aria-label="Tech stack">
               <div className="flex">
                 {stack.map((s, i) => {
-                  const ic = getTechIcon(s.slug);
-                  if (!ic) return null;
+                  if (!s.path) return null;
                   return (
                     <span
                       key={s.id}
-                      title={ic.title}
+                      title={s.title || s.slug}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md"
                       style={{
                         marginLeft: i === 0 ? 0 : -16,
@@ -296,7 +292,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                       }}
                     >
                       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
-                        <path d={ic.path} fill={ic.hex} />
+                        <path d={s.path} fill={`#${s.hex}`} />
                       </svg>
                     </span>
                   );
@@ -490,25 +486,20 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
 
           <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
-            <div
-              className="h-72 w-72 overflow-hidden rounded-full p-1 shadow-2xl"
-              style={{ background: "rgba(255,255,255,0.14)" }}
-            >
-              <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
-                {profile?.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={optImg(profile.avatar, { w: 600, h: 600, crop: "fill" })}
-                    alt={profile.name}
-                    className="h-full w-full object-cover"
-                    style={{ objectPosition: avatarPos }}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
-                    {(profile?.name || "?").charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
+            <div className="h-72 w-72 overflow-hidden rounded-full bg-black/40 shadow-2xl">
+              {profile?.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={optImg(profile.avatar, { w: 600, h: 600, crop: "fill" })}
+                  alt={profile.name}
+                  className="h-full w-full object-cover"
+                  style={{ objectPosition: avatarPos }}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-7xl font-bold text-white">
+                  {(profile?.name || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
             <p
               className="mt-3 text-center text-sm font-semibold text-white/90"
