@@ -21,5 +21,20 @@ export async function GET() {
   } catch (e) {
     out.sel2Err = String((e as Error).message || e).slice(0, 200);
   }
+  try {
+    out.one = await d1Query("SELECT 1 AS ok");
+  } catch (e) {
+    out.oneErr = String((e as Error).message || e).slice(0, 200);
+  }
+  try {
+    out.master = await d1Query("SELECT name FROM sqlite_master WHERE type='table'");
+  } catch (e) {
+    out.masterErr = String((e as Error).message || e).slice(0, 200);
+  }
+  try {
+    out.cnt = await d1Query("SELECT COUNT(*) AS c FROM store");
+  } catch (e) {
+    out.cntErr = String((e as Error).message || e).slice(0, 200);
+  }
   return NextResponse.json(out);
 }
