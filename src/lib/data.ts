@@ -104,6 +104,12 @@ export type Branding = {
   text: string; // "Made by XySpace Tch"
 };
 
+// Section mana saja yang tampil di halaman publik
+export type Sections = {
+  stack: boolean;
+  team: boolean;
+};
+
 export type Store = {
   profile: Profile;
   links: LinkItem[];
@@ -115,6 +121,7 @@ export type Store = {
   theme: ThemeMode;
   linkShape: LinkShape;
   stackAlign: StackAlign;
+  sections: Sections;
   branding: Branding;
 };
 
@@ -236,10 +243,11 @@ const DEFAULT_STORE: Store = {
   theme: "dark",
   linkShape: "rounded",
   stackAlign: "right",
+  sections: { stack: true, team: true },
   branding: { enabled: true, text: "Made by XySpace Tch" },
 };
 
-function normalize(parsed: Partial<Store>): Store {
+export function normalize(parsed: Partial<Store>): Store {
   const d = DEFAULT_STORE;
   return {
     profile: {
@@ -305,6 +313,10 @@ function normalize(parsed: Partial<Store>): Store {
     stackAlign: (["left", "center", "right"] as const).includes(parsed.stackAlign as never)
       ? (parsed.stackAlign as Store["stackAlign"])
       : "right",
+    sections: {
+      stack: parsed.sections?.stack !== false,
+      team: parsed.sections?.team !== false,
+    },
     branding: { ...d.branding, ...(parsed.branding || {}) },
   };
 }

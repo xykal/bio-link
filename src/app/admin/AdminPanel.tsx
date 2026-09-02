@@ -17,6 +17,7 @@ import type {
   Member,
   LinkShape,
   StackAlign,
+  Sections,
 } from "@/lib/data";
 
 const SHAPES: { key: ProfileShape; label: string }[] = [
@@ -103,6 +104,7 @@ export default function AdminPanel() {
   const [social, setSocial] = useState<Socials | null>(null);
   const [stack, setStack] = useState<StackItem[]>([]);
   const [stackAlign, setStackAlign] = useState<StackAlign>("right");
+  const [sections, setSections] = useState<Sections>({ stack: true, team: true });
   const [team, setTeam] = useState<Member[]>([]);
   const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
   const [fonts, setFonts] = useState<FontsConfig | null>(null);
@@ -121,6 +123,7 @@ export default function AdminPanel() {
   });
   const [saveBusy, setSaveBusy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -144,6 +147,7 @@ export default function AdminPanel() {
       setSocial(d.social);
       setStack(d.stack || []);
       setStackAlign(d.stackAlign || "right");
+      setSections(d.sections || { stack: true, team: true });
       setTeam(d.team || []);
       setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
@@ -243,6 +247,7 @@ export default function AdminPanel() {
       if (patch.social) setSocial(d.social);
       if (patch.stack) setStack(d.stack);
       if (patch.stackAlign) setStackAlign(d.stackAlign);
+      if (patch.sections) setSections(d.sections);
       if (patch.team) setTeam(d.team);
       if (patch.linkShape) setLinkShape(d.linkShape);
       if (patch.seo) setSeo(d.seo);
@@ -352,6 +357,60 @@ export default function AdminPanel() {
     const next = [...team];
     [next[idx], next[t]] = [next[t], next[idx]];
     setTeam(next);
+  }
+
+  // ---- backup / restore / reset ----
+  async function reloadData() {
+    await loadData();
+    setPreviewKey((k) => k + 1);
+  }
+
+  function handleExport() {
+    const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bio-link-backup.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    flash("Backup diunduh");
+  }
+
+  async function handleImport(file: File | undefined) {
+    if (!file) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      flash("File JSON tidak valid", false);
+      return;
+    }
+    setSaveBusy(true);
+    const r = await fetch("/api/admin/backup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed),
+    });
+    setSaveBusy(false);
+    if (!r.ok) {
+      flash("Impor gagal", false);
+      return;
+    }
+    await reloadData();
+    flash("Backup dipulihkan");
+  }
+
+  async function handleReset() {
+    setSaveBusy(true);
+    const r = await fetch("/api/admin/reset", { method: "POST" });
+    setSaveBusy(false);
+    setConfirmReset(false);
+    if (!r.ok) {
+      flash("Reset gagal", false);
+      return;
+    }
+    await reloadData();
+    flash("Data direset ke bawaan");
   }
 
   // ---- image upload helper ----
@@ -843,6 +902,18 @@ export default function AdminPanel() {
           right={<span className="text-sm text-white/40">{stack.length} dipilih</span>}
         >
           <div className="space-y-4">
+            <Field label="Tampilkan stack di halaman">
+              <label className="inline-flex items-center gap-2 text-sm text-white/70">
+                <input
+                  type="checkbox"
+                  checked={sections.stack}
+                  onChange={(e) => saveSettings({ sections: { ...sections, stack: e.target.checked } })}
+                  className="h-4 w-4 accent-violet-500"
+                />
+                Matikan untuk menyembunyikan seksi keahlian di halaman publik
+              </label>
+            </Field>
+
             <Field label="Posisi stack di halaman">
               <div className="flex rounded-xl border border-white/10 p-1">
                 {STACK_ALIGNS.map((a) => (
@@ -947,6 +1018,16 @@ export default function AdminPanel() {
           }
         >
           <div className="space-y-3">
+            <label className="inline-flex items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={sections.team}
+                onChange={(e) => saveSettings({ sections: { ...sections, team: e.target.checked } })}
+                className="h-4 w-4 accent-violet-500"
+              />
+              Tampilkan seksi team di halaman
+            </label>
+
             {team.length === 0 && (
               <p className="text-sm text-white/40">Belum ada anggota. Klik “+ Tambah”.</p>
             )}
@@ -1067,6 +1148,60 @@ export default function AdminPanel() {
               <button onClick={() => saveSettings({ branding })} className={btnCls}>Simpan Branding</button>
             </div>
           )}
+        </Section>
+
+        <Section title="Data" sub="Backup, restore, dan reset seluruh isi panel">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white"
+            >
+              Unduh backup (JSON)
+            </button>
+            <label className="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white">
+              Impor backup
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  handleImport(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {confirmReset ? (
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={saveBusy}
+                  className="rounded-xl bg-rose-600 px-4 py-2.5 font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60"
+                >
+                  Ya, reset semua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="rounded-xl border border-white/10 px-4 py-2.5 font-semibold text-white/70 transition hover:text-white"
+                >
+                  Batal
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 font-semibold text-rose-200 transition hover:bg-rose-500/20"
+              >
+                Reset ke bawaan
+              </button>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-white/35">
+            Backup berisi seluruh pengaturan, link, stack, dan team. Mengimpor backup akan menimpa data saat ini.
+          </p>
         </Section>
       </div>
     </main>

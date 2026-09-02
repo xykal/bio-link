@@ -16,6 +16,7 @@ type PublicData = {
   theme: "dark" | "light";
   linkShape: Store["linkShape"];
   stackAlign: Store["stackAlign"];
+  sections: Store["sections"];
   branding: Store["branding"];
   rulesUrl: string;
 };
@@ -50,6 +51,7 @@ function toPublic(s: Store): PublicData {
     theme: s.theme,
     linkShape: s.linkShape || "rounded",
     stackAlign: s.stackAlign || "right",
+    sections: s.sections || { stack: true, team: true },
     branding: s.branding,
     rulesUrl: s.seo.rulesUrl,
   };
@@ -142,6 +144,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const ringColor = isLight ? "#f7f7f9" : "#08080d";
   const stack = data?.stack || [];
   const team = data?.team || [];
+  const sections = data?.sections || { stack: true, team: true };
   const stackJustify =
     data?.stackAlign === "left"
       ? "justify-start"
@@ -275,7 +278,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           )}
 
           {/* STACK / KEAHLIAN: logo asli (warna brand), posisi bisa kiri/tengah/kanan, tumpuk-tindih setengah */}
-          {stack.length > 0 && (
+          {sections.stack && stack.length > 0 && (
             <div className={`mt-5 flex w-full items-center ${stackJustify}`} aria-label="Tech stack">
               <div className="flex">
                 {stack.map((s, i) => {
@@ -378,7 +381,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           )}
 
           {/* TEAM & CONTRIBUTOR: avatar bulat sejajar */}
-          {team.length > 0 && (
+          {sections.team && team.length > 0 && (
             <div className="mt-9 w-full">
               <p
                 className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.2em] opacity-40"

@@ -50,6 +50,12 @@ export async function PATCH(req: Request) {
   if (["left", "center", "right"].includes(body.stackAlign)) {
     store.stackAlign = body.stackAlign;
   }
+  if (body.sections && typeof body.sections === "object") {
+    store.sections = {
+      stack: body.sections.stack !== false,
+      team: body.sections.team !== false,
+    };
+  }
   if (body.seo && typeof body.seo === "object") {
     store.seo = { ...store.seo, ...body.seo };
   }
