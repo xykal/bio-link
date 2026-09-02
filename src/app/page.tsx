@@ -37,6 +37,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     icons,
+    // Marker deploy: biar gampang ngecek build mana yang live di prod.
+    other: { "x-build": "r12c-mic-guard" },
     openGraph: {
       title,
       description,
