@@ -331,6 +331,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     if (!story) {
       return;
     }
+    if (story.type === "video") {
+      // Video maju sendiri lewat onEnded; progres lewat onTimeUpdate.
+      return;
+    }
     const dur = Math.max(1, story.duration || 5) * 1000;
     let elapsed = 0;
     const stepMs = 100;
@@ -945,7 +949,24 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </button>
 
             {/* konten story */}
-            {activeStory.type === "image" && activeStory.media ? (
+            {activeStory.type === "video" && activeStory.media ? (
+              <video
+                key={activeStory.id}
+                src={activeStory.media}
+                className="absolute inset-0 h-full w-full bg-black object-contain"
+                autoPlay
+                muted
+                playsInline
+                controls
+                onEnded={() => gotoStory((storyIndex ?? 0) + 1)}
+                onTimeUpdate={(e) => {
+                  const v = e.currentTarget;
+                  if (v.duration && Number.isFinite(v.duration)) {
+                    setStoryProgress((v.currentTime / v.duration) * 100);
+                  }
+                }}
+              />
+            ) : activeStory.type === "image" && activeStory.media ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={activeStory.media}
@@ -996,7 +1017,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
             {/* kontrol bawah: like + komentar */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/85 to-transparent p-3 pt-8">
-              {activeStory.type === "image" && activeStory.text && (
+              {activeStory.type !== "text" && activeStory.text && (
                 <p
                   className="mb-2 text-sm font-medium text-white drop-shadow"
                   style={{ fontFamily: "var(--font-bio)" }}

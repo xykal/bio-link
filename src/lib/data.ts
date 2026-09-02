@@ -74,15 +74,18 @@ export type StoryComment = {
 
 export type Story = {
   id: string;
-  type: "image" | "text";
-  media: string; // url gambar (untuk type image)
-  text: string; // caption (image) atau isi teks (text)
+  type: "image" | "text" | "video";
+  media: string; // url gambar/video (untuk type image/video)
+  text: string; // caption (image/video) atau isi teks (text)
   bg: string; // warna/gradasi latar untuk story teks
-  duration: number; // detik per story
+  duration: number; // detik per story (dipakai image/text; video ikut panjang video)
   createdAt: number;
   likes: number;
   comments: StoryComment[];
 };
+
+// Story otomatis dihapus total setelah 24 jam.
+export const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Tata letak daftar link di halaman publik
 export type LinkLayout = "list" | "grid" | "compact";
@@ -390,11 +393,13 @@ export function normalize(parsed: Partial<Store>): Store {
       : [...d.team],
     stories: Array.isArray(parsed.stories)
       ? parsed.stories
-          .filter((s) => s && (s.type === "image" || s.type === "text"))
+          .filter(
+            (s) => s && (s.type === "image" || s.type === "text" || s.type === "video")
+          )
           .slice(0, 30)
           .map((s) => ({
             id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
-            type: s.type === "text" ? "text" : "image",
+            type: s.type === "text" ? "text" : s.type === "video" ? "video" : "image",
             media: typeof s.media === "string" ? s.media.slice(0, 500) : "",
             text: typeof s.text === "string" ? s.text.slice(0, 280) : "",
             bg: typeof s.bg === "string" ? s.bg.slice(0, 120) : "",
@@ -512,10 +517,29 @@ async function fileWrite(store: Store): Promise<void> {
   await fs.writeFile(DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
 }
 
+// Buang story yang sudah lewat 24 jam (auto-hapus total).
+function pruneExpiredStories(store: Store): { store: Store; changed: boolean } {
+  const now = Date.now();
+  const kept = store.stories.filter((s) => now - (s.createdAt || 0) < STORY_TTL_MS);
+  if (kept.length === store.stories.length) return { store, changed: false };
+  return { store: { ...store, stories: kept }, changed: true };
+}
+
 export async function readStore(): Promise<Store> {
-  return useD1 ? d1Read() : fileRead();
+  const raw = useD1 ? await d1Read() : await fileRead();
+  const { store, changed } = pruneExpiredStories(raw);
+  if (changed) {
+    // Persist penghapusan. Di fs read-only (serverless file-mode) gagal diam-diam;
+    // story tetap disembunyikan dari hasil baca.
+    try {
+      await writeStore(store);
+    } catch {
+      /* ignore */
+    }
+  }
+  return store;
 }
 export async function writeStore(store: Store): Promise<void> {
   return useD1 ? d1Write(store) : fileWrite(store);
 }
-export { useD1 };
+export { useD1, STORY_TTL_MS as STORY_TTL };

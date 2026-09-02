@@ -135,6 +135,18 @@ const STORY_BGS = [
   "linear-gradient(135deg,#1e293b,#475569)",
 ];
 
+// Salinan TTL story (24 jam) untuk tampilan. Tidak import dari data.ts karena
+// modul itu pakai fs (node-only) — AdminPanel adalah client component.
+const STORY_TTL_MS = 24 * 60 * 60 * 1000;
+function storyExpireLabel(createdAt: number) {
+  return new Date(createdAt + STORY_TTL_MS).toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 type StatsResp = {
   analytics: {
     total: number;
@@ -288,7 +300,7 @@ export default function AdminPanel() {
   }, [authed, view]);
 
   // ---- story helpers ----
-  function addStory(type: "image" | "text") {
+  function addStory(type: "image" | "text" | "video") {
     const st: Story = {
       id: crypto.randomUUID(),
       type,
@@ -582,6 +594,42 @@ export default function AdminPanel() {
       return null;
     }
     return d.url;
+  }
+
+  // Upload LANGSUNG ke Cloudinary (browser -> Cloudinary). Dipakai untuk story
+  // foto/video: file besar tak lewat function, jadi video tidak kena limit body.
+  async function uploadDirect(folder: string, file: File): Promise<string | null> {
+    try {
+      const sr = await fetch("/api/upload/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder }),
+      });
+      const s = await sr.json().catch(() => ({}));
+      if (!sr.ok || !s.cloudName) {
+        flash(s.error || "Gagal menyiapkan upload", false);
+        return null;
+      }
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("folder", s.folder);
+      fd.set("timestamp", String(s.timestamp));
+      fd.set("api_key", s.apiKey);
+      fd.set("signature", s.signature);
+      const up = await fetch(
+        `https://api.cloudinary.com/v1_1/${s.cloudName}/auto/upload`,
+        { method: "POST", body: fd }
+      );
+      const d = await up.json().catch(() => ({}));
+      if (!d.secure_url) {
+        flash(d.error?.message || "Upload gagal", false);
+        return null;
+      }
+      return d.secure_url as string;
+    } catch {
+      flash("Upload gagal", false);
+      return null;
+    }
   }
 
   if (authed === null) {
@@ -1450,13 +1498,20 @@ export default function AdminPanel() {
               >
                 + Teks
               </button>
+              <button
+                onClick={() => addStory("video")}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              >
+                + Video
+              </button>
             </div>
           }
         >
           <div className="space-y-3">
             {stories.length === 0 && (
               <p className="text-sm text-white/40">
-                Belum ada story. Tambah story foto atau teks di atas.
+                Belum ada story. Tambah story foto, teks, atau video di atas. Story otomatis
+                terhapus setelah 24 jam.
               </p>
             )}
             {stories.map((st, i) => (
@@ -1465,30 +1520,48 @@ export default function AdminPanel() {
                   <div
                     className="flex h-24 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 p-1 text-center text-[10px] font-semibold text-white"
                     style={{
-                      background: st.type === "image" && st.media ? "#000" : st.bg || "#333",
+                      background: st.type === "text" ? st.bg || "#333" : "#000",
                     }}
                   >
                     {st.type === "image" && st.media ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={st.media} alt="" className="h-full w-full object-cover" />
+                    ) : st.type === "video" && st.media ? (
+                      <video
+                        src={st.media}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                      />
                     ) : (
-                      <span className="leading-tight">{st.text || "Story"}</span>
+                      <span className="leading-tight">
+                        {st.type === "video" ? "Video" : st.text || "Story"}
+                      </span>
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    {st.type === "image" ? (
+                    {st.type !== "text" ? (
                       <>
                         <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white">
-                          <Icon name="image" className="h-3.5 w-3.5" />
-                          {st.media ? "Ganti foto" : "Upload foto"}
+                          <Icon
+                            name={st.type === "video" ? "play" : "image"}
+                            className="h-3.5 w-3.5"
+                          />
+                          {st.media
+                            ? st.type === "video"
+                              ? "Ganti video"
+                              : "Ganti foto"
+                            : st.type === "video"
+                              ? "Upload video"
+                              : "Upload foto"}
                           <input
                             type="file"
-                            accept="image/*"
+                            accept={st.type === "video" ? "video/*" : "image/*"}
                             className="hidden"
                             onChange={async (e) => {
                               const f = e.target.files?.[0];
                               if (!f) return;
-                              const url = await upload("bio-link/story", f);
+                              const url = await uploadDirect("bio-link/story", f);
                               if (url) updateStory(st.id, { media: url });
                             }}
                           />
@@ -1528,27 +1601,33 @@ export default function AdminPanel() {
                       </>
                     )}
                     <div className="flex flex-wrap items-center gap-3 text-xs text-white/45">
-                      <label className="flex items-center gap-1.5">
-                        Durasi
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={st.duration}
-                          onChange={(e) =>
-                            updateStory(st.id, {
-                              duration: Math.max(1, Math.min(30, Number(e.target.value) || 5)),
-                            })
-                          }
-                          className="w-16 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-white"
-                        />
-                        dtk
-                      </label>
-                      <span className="inline-flex items-center gap-1">
-                        {st.likes} like
-                      </span>
+                      {st.type !== "video" && (
+                        <label className="flex items-center gap-1.5">
+                          Durasi
+                          <input
+                            type="number"
+                            min={1}
+                            max={30}
+                            value={st.duration}
+                            onChange={(e) =>
+                              updateStory(st.id, {
+                                duration: Math.max(
+                                  1,
+                                  Math.min(30, Number(e.target.value) || 5)
+                                ),
+                              })
+                            }
+                            className="w-16 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-white"
+                          />
+                          dtk
+                        </label>
+                      )}
+                      <span className="inline-flex items-center gap-1">{st.likes} like</span>
                       <span className="inline-flex items-center gap-1">
                         {st.comments?.length || 0} komen
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-amber-300/70">
+                        Auto-hapus: {storyExpireLabel(st.createdAt)}
                       </span>
                     </div>
                   </div>

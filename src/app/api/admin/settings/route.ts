@@ -49,12 +49,15 @@ export async function PATCH(req: Request) {
   }
   if (Array.isArray(body.stories)) {
     store.stories = body.stories
-      .filter((s: { type?: unknown }) => s && (s.type === "image" || s.type === "text"))
+      .filter(
+        (s: { type?: unknown }) =>
+          s && (s.type === "image" || s.type === "text" || s.type === "video")
+      )
       .slice(0, 30)
       .map(
         (s: {
           id?: string;
-          type: "image" | "text";
+          type: "image" | "text" | "video";
           media?: string;
           text?: string;
           bg?: string;
@@ -64,7 +67,7 @@ export async function PATCH(req: Request) {
           comments?: unknown;
         }) => ({
           id: typeof s.id === "string" && s.id ? s.id : randomUUID(),
-          type: s.type === "text" ? "text" : "image",
+          type: s.type === "text" ? "text" : s.type === "video" ? "video" : "image",
           media: typeof s.media === "string" ? s.media.slice(0, 500) : "",
           text: typeof s.text === "string" ? s.text.slice(0, 280) : "",
           bg: typeof s.bg === "string" ? s.bg.slice(0, 120) : "",
