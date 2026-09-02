@@ -336,6 +336,15 @@ export default function AdminPanel() {
       flash("Browser tidak mendukung perekaman suara", false);
       return;
     }
+    // Di pratinjau tertanam (iframe) browser memblokir mic tanpa dialog.
+    // Kasih tahu biar buka di tab penuh supaya dialog izin Chrome muncul.
+    const inIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (inIframe) {
+      flash(
+        "Mic diblokir di pratinjau tertanam. Buka /admin di TAB BARU (bukan iframe) lalu pencet Rekam — dialog izin Chrome akan muncul.",
+        false
+      );
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recStreamRef.current = stream;

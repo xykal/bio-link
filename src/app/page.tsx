@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
@@ -42,5 +43,15 @@ export default async function Home() {
   } catch {
     initial = null;
   }
-  return <BioPage initial={initial} />;
+  // Story yang udah dilihat visitor (dari cookie) -> render ring abu saat SSR.
+  let initialViewed: string[] = [];
+  try {
+    const store = await cookies();
+    const raw = store.get("bio_viewed")?.value || "";
+    const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+    if (Array.isArray(parsed)) initialViewed = parsed.filter((x) => typeof x === "string");
+  } catch {
+    initialViewed = [];
+  }
+  return <BioPage initial={initial} initialViewed={initialViewed} />;
 }

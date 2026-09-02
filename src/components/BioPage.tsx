@@ -58,7 +58,22 @@ function trackLinkClick(id: string, title: string) {
 }
 
 const VISITOR_KEY = "bio_visitor_name";
+const VISITOR_ID_KEY = "bio_visitor_id";
 const VIEWED_KEY = "bio_viewed_stories";
+
+// ID visitor anonim (persist lokal) sebagai kunci state di DB.
+function getVisitorId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const saved = localStorage.getItem(VISITOR_ID_KEY);
+    if (saved) return saved;
+    const id = crypto.randomUUID();
+    localStorage.setItem(VISITOR_ID_KEY, id);
+    return id;
+  } catch {
+    return "";
+  }
+}
 
 const INDO_NAMES = [
   "Asep", "Budi", "Citra", "Dewi", "Eko", "Fitri", "Gilang", "Hana",
@@ -318,7 +333,13 @@ function ProfileBubble({
   );
 }
 
-export default function BioPage({ initial }: { initial: Store | null }) {
+export default function BioPage({
+  initial,
+  initialViewed,
+}: {
+  initial: Store | null;
+  initialViewed?: string[];
+}) {
   const [data, setData] = useState<PublicData | null>(() =>
     initial ? toPublic(initial) : null
   );
@@ -333,14 +354,20 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const [paused, setPaused] = useState(false); // long-press = tahan sementara
   const [muted, setMuted] = useState(true); // video mulai muted (aturan autoplay)
   const [commentOpen, setCommentOpen] = useState(false); // bottom sheet komen
-  const [visitorName] = useState(getVisitorName);
-  const [viewedSet, setViewedSet] = useState<Record<string, boolean>>(readViewed);
+  const [visitorId] = useState(getVisitorId);
+  const [visitorName, setVisitorName] = useState(getVisitorName);
+  const [viewedSet, setViewedSet] = useState<Record<string, boolean>>(() => ({
+    // Dari cookie (SSR) biar abu langsung tampil & tahan refresh, + localStorage.
+    ...Object.fromEntries((initialViewed || []).map((id) => [id, true])),
+    ...readViewed(),
+  }));
   const videoRef = useRef<HTMLVideoElement>(null);
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const pausedRef = useRef(false);
   const avatarPressTimer = useRef<number | null>(null);
   const avatarLong = useRef(false);
+  const markViewedRef = useRef<(id?: string) => void>(() => {});
   const [likeMap, setLikeMap] = useState<Record<string, number>>({});
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState("");
@@ -390,6 +417,34 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     fetch("/api/track", { method: "POST" }).catch(() => {});
   }, []);
 
+  // Sinkronkan state visitor anonim dari DB (nama, like, viewed) biar konsisten
+  // walau refresh / buka lagi. setState di callback promise -> aman.
+  useEffect(() => {
+    const localViewed = readViewed(); // fallback localStorage (sync via tick)
+    const applyLocal = () =>
+      setViewedSet((s) => ({ ...localViewed, ...s }));
+    if (!visitorId) {
+      Promise.resolve().then(applyLocal);
+      return;
+    }
+    fetch("/api/visitor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorId }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        applyLocal();
+        if (!d) return;
+        if (typeof d.name === "string" && d.name) setVisitorName(d.name);
+        if (Array.isArray(d.liked))
+          setLikedSet((s) => ({ ...s, ...Object.fromEntries(d.liked.map((x: string) => [x, true])) }));
+        if (Array.isArray(d.viewed))
+          setViewedSet((s) => ({ ...s, ...Object.fromEntries(d.viewed.map((x: string) => [x, true])) }));
+      })
+      .catch(applyLocal);
+  }, [visitorId]);
+
   // Long-press menahan story sementara; lepas = lanjut lagi.
   const beginPress = useCallback(() => {
     longPressed.current = false;
@@ -433,7 +488,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       if (elapsed >= dur) {
         clearInterval(id);
         setStoryProgress(0);
-        markViewed(story.id);
+        markViewedRef.current(story.id);
         setStoryIndex((cur) =>
           cur === null ? null : cur + 1 < list.length ? cur + 1 : null
         );
@@ -452,7 +507,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
   // Tandai story sudah dilihat -> garis/segmen jadi abu-abu (disimpan lokal).
   function markViewed(id?: string) {
-    if (!id) return;
+    if (!id || viewedSet[id]) return;
     setViewedSet((prev) => {
       if (prev[id]) return prev;
       const next = { ...prev, [id]: true };
@@ -463,7 +518,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       }
       return next;
     });
+    // Simpan juga ke DB biar abu permanen walau refresh / ganti perangkat-local.
+    fetch("/api/story/view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storyId: id, visitorId }),
+    }).catch(() => {});
   }
+  // Ref selalu menunjuk markViewed terbaru tanpa bikin timer re-run.
+  useEffect(() => {
+    markViewedRef.current = markViewed;
+  });
   function currentStoryId() {
     return storyIndex !== null ? (data?.stories || [])[storyIndex]?.id : undefined;
   }
@@ -514,18 +579,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     }
   }
   async function likeStory(id: string) {
-    if (likedSet[id]) return;
-    const base = likeMap[id] ?? stories.find((s) => s.id === id)?.likes ?? 0;
+    if (likedSet[id]) return; // udah like (dari DB) -> cegah dobel
     setLikedSet((s) => ({ ...s, [id]: true }));
-    setLikeMap((m) => ({ ...m, [id]: base + 1 }));
     try {
       const r = await fetch("/api/story/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyId: id }),
+        body: JSON.stringify({ storyId: id, visitorId }),
       });
       if (r.ok) {
         const d = await r.json();
+        // Server yg pegang jumlah asli (1x per visitor) -> pakai itu.
         if (typeof d.likes === "number") setLikeMap((m) => ({ ...m, [id]: d.likes }));
       }
     } catch {
@@ -542,15 +606,22 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     if (!activeStory) return;
     const text = commentText.trim();
     if (!text) return;
-    const name = visitorName; // nama anonim acak, tetap sama per pengunjung
+    const name = visitorName; // nama anonim, konsisten per pengunjung (dari DB)
     setCommentText("");
     pushFloating(name, text);
     try {
-      await fetch("/api/story/comment", {
+      const r = await fetch("/api/story/comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyId: activeStory.id, name, text }),
+        body: JSON.stringify({ storyId: activeStory.id, text, visitorId }),
       });
+      if (r.ok) {
+        const d = await r.json();
+        if (d?.comment?.name) {
+          // pakai nama resmi dari DB biar konsisten
+          setVisitorName(d.comment.name);
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -1323,10 +1394,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               {floating.map((c) => (
                 <div
                   key={c.key}
-                  className="animate-float-up max-w-full rounded-2xl rounded-br-sm bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
+                  className="animate-float-up max-w-full rounded-2xl rounded-br-sm bg-black/60 px-3 py-2 text-xs text-white backdrop-blur-sm"
                 >
-                  <span className="font-semibold text-white/90">{c.name}</span>{" "}
-                  <span className="text-white/80">{c.text}</span>
+                  <p className="font-bold text-violet-300">{c.name}</p>
+                  <p className="mt-0.5 leading-snug text-white/90">{c.text}</p>
                 </div>
               ))}
             </div>

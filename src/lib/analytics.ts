@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { useD1, d1Query } from "./d1";
+import { randomAnonName } from "./names";
 
 // Statistik pengunjung + interaksi. Persisten: Cloudflare D1 (baris id=2 di
 // tabel `store`) kalau dikonfigurasi, else file data/analytics.json (dev).
@@ -8,6 +9,12 @@ import { useD1, d1Query } from "./d1";
 
 export type Visit = { at: number; path: string; ref: string; ua: string };
 export type LinkClick = { title: string; count: number };
+export type VisitorRec = {
+  name: string;
+  liked: string[]; // storyId yg udah di-like (1x per visitor)
+  viewed: string[]; // storyId yg udah dilihat (abu selamanya)
+  at: number;
+};
 export type AnalyticsData = {
   total: number;
   byDay: Record<string, number>;
@@ -16,6 +23,7 @@ export type AnalyticsData = {
   linkClicks: Record<string, LinkClick>; // key: linkId
   refs: Record<string, number>; // key: host referrer
   devices: Record<string, number>; // key: mobile|desktop|tablet|bot
+  visitors: Record<string, VisitorRec>; // key: visitorId (anon)
 };
 
 const EMPTY: AnalyticsData = {
@@ -26,6 +34,7 @@ const EMPTY: AnalyticsData = {
   linkClicks: {},
   refs: {},
   devices: {},
+  visitors: {},
 };
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -44,6 +53,7 @@ function merge(raw: Partial<AnalyticsData>): AnalyticsData {
     linkClicks: raw.linkClicks && typeof raw.linkClicks === "object" ? raw.linkClicks : {},
     refs: raw.refs && typeof raw.refs === "object" ? raw.refs : {},
     devices: raw.devices && typeof raw.devices === "object" ? raw.devices : {},
+    visitors: raw.visitors && typeof raw.visitors === "object" ? raw.visitors : {},
   };
 }
 
@@ -133,6 +143,51 @@ export async function trackLinkClick(linkId: string, title: string): Promise<voi
       [linkId]: { title: title || prev.title || linkId, count: prev.count + 1 },
     },
   });
+}
+
+// ---- Visitor anonim (persist di DB): nama, like 1x, viewed selamanya ----
+export function sanitizeVisitorId(id: unknown): string {
+  return String(id || "")
+    .replace(/[^a-zA-Z0-9-]/g, "")
+    .slice(0, 64);
+}
+
+function newVisitor(): VisitorRec {
+  return { name: randomAnonName(), liked: [], viewed: [], at: Date.now() };
+}
+
+// Pastikan visitor ada; kalau baru, bikin nama anonim & simpan. Kembalikan rec.
+export async function ensureVisitor(id: string): Promise<VisitorRec> {
+  if (!id) return newVisitor();
+  const data = await read();
+  const existing = data.visitors[id];
+  if (existing) return existing;
+  const rec = newVisitor();
+  await write({ ...data, visitors: { ...data.visitors, [id]: rec } });
+  return rec;
+}
+
+// Like 1x per visitor. `already` true kalau visitor ini udah like story tsb.
+export async function visitorLike(
+  id: string,
+  storyId: string
+): Promise<{ rec: VisitorRec; already: boolean }> {
+  const data = await read();
+  const rec = data.visitors[id] || newVisitor();
+  const already = rec.liked.includes(storyId);
+  const next = already ? rec : { ...rec, liked: [...rec.liked, storyId] };
+  await write({ ...data, visitors: { ...data.visitors, [id]: next } });
+  return { rec: next, already };
+}
+
+// Tandai story dilihat (abu selamanya) per visitor.
+export async function visitorView(id: string, storyId: string): Promise<VisitorRec> {
+  const data = await read();
+  const rec = data.visitors[id] || newVisitor();
+  if (rec.viewed.includes(storyId)) return rec;
+  const next = { ...rec, viewed: [...rec.viewed, storyId].slice(-300) };
+  await write({ ...data, visitors: { ...data.visitors, [id]: next } });
+  return next;
 }
 
 export async function getAnalytics(): Promise<AnalyticsData> {
