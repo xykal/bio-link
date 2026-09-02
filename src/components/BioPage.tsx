@@ -62,17 +62,37 @@ const VISITOR_ID_KEY = "bio_visitor_id";
 const VIEWED_KEY = "bio_viewed_stories";
 
 // ID visitor anonim (persist lokal) sebagai kunci state di DB.
+// localStorage utama + cookie fallback (biar identitas like/viewed tahan
+// walau browser agresif bersihkan localStorage).
+function getCookie(k: string): string {
+  if (typeof document === "undefined") return "";
+  const m = document.cookie.match(new RegExp("(?:^|; )" + k + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+function persistVisitorId(id: string) {
+  try {
+    localStorage.setItem(VISITOR_ID_KEY, id);
+  } catch {
+    /* private mode */
+  }
+  try {
+    document.cookie = `${VISITOR_ID_KEY}=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch {
+    /* ignore */
+  }
+}
 function getVisitorId(): string {
   if (typeof window === "undefined") return "";
+  let id = "";
   try {
-    const saved = localStorage.getItem(VISITOR_ID_KEY);
-    if (saved) return saved;
-    const id = crypto.randomUUID();
-    localStorage.setItem(VISITOR_ID_KEY, id);
-    return id;
+    id = localStorage.getItem(VISITOR_ID_KEY) || "";
   } catch {
-    return "";
+    /* ignore */
   }
+  if (!id) id = getCookie(VISITOR_ID_KEY);
+  if (!id) id = crypto.randomUUID();
+  persistVisitorId(id);
+  return id;
 }
 
 const INDO_NAMES = [
@@ -484,18 +504,16 @@ export default function BioPage({
     setAudioPlaying(false);
   }
 
-  // Buka story: komentar yang udah ada SELALU ikut melayang (stagger), lalu
-  // tandai biar polling gak nge-float ulang.
+  // Buka story: komen yang udah ada SELALU melayang tiap dibuka (stagger).
+  // Known-set di-reset per buka biar polling cuma nge-float komentar BARU.
   useEffect(() => {
     if (storyIndex === null) return;
     const st = (data?.stories || [])[storyIndex];
     if (!st) return;
     activeStoryIdRef.current = st.id;
-    const known = (knownFloatRef.current[st.id] ||= new Set());
-    const existing = (st.comments || []).slice(-3);
-    existing.forEach((c, i) => {
-      if (known.has(c.id)) return;
-      known.add(c.id);
+    const known = new Set<string>((st.comments || []).map((c) => c.id));
+    knownFloatRef.current[st.id] = known;
+    (st.comments || []).slice(-3).forEach((c, i) => {
       window.setTimeout(() => pushFloating(c.name, c.text), 700 + i * 900);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1472,8 +1490,10 @@ export default function BioPage({
                     {activeStory.text}
                   </p>
                 )}
-                {/* player voice note gaya WA: tombol putar + waveform + mic */}
-                <div className="w-full max-w-sm rounded-2xl bg-black/45 p-4 backdrop-blur-sm">
+                {/* player voice note gaya WA: tombol putar + waveform + mic.
+                    z-20 biar berada DI ATAS zona tap navigasi — klik play gak
+                    kelewat jadi "ganti story". */}
+                <div className="relative z-20 w-full max-w-sm rounded-2xl bg-black/45 p-4 backdrop-blur-sm">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
