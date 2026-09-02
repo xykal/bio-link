@@ -1,24 +1,37 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
 
 export const dynamic = "force-dynamic";
 
+// Satu baca D1 per request (React cache = dedupe utk metadata, viewport, Home).
+// Dibungkus try/catch supaya halaman TIDAK PERNAH 500 walau D1 sedang blip;
+// kalau gagal, balik null dan BioPage fallback ke fetch client-side.
+const getStore = cache(async () => {
+  try {
+    return await readStore();
+  } catch {
+    return null;
+  }
+});
+
 // Warna chrome browser (mobile) mengikuti mode tema.
 export async function generateViewport(): Promise<Viewport> {
-  const store = await readStore();
-  return { themeColor: store.theme === "light" ? "#f7f7f9" : "#08080d" };
+  const store = await getStore();
+  return { themeColor: store?.theme === "light" ? "#f7f7f9" : "#08080d" };
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const store = await readStore();
-  const { seo, profile } = store;
-  const title = seo.title || profile.name || "Bio Link";
-  const description = seo.description || profile.bio || "";
-  const icons: Metadata["icons"] = seo.favicon ? { icon: optImg(seo.favicon, { w: 96, h: 96, crop: "fill" }) } : undefined;
-  const ogImages = seo.ogImage ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }] : undefined;
+  const store = await getStore();
+  const seo = store?.seo;
+  const profile = store?.profile;
+  const title = seo?.title || profile?.name || "Bio Link";
+  const description = seo?.description || profile?.bio || "";
+  const icons: Metadata["icons"] = seo?.favicon ? { icon: optImg(seo.favicon, { w: 96, h: 96, crop: "fill" }) } : undefined;
+  const ogImages = seo?.ogImage ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }] : undefined;
 
   return {
     title,
@@ -37,12 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  let initial = null;
-  try {
-    initial = await readStore();
-  } catch {
-    initial = null;
-  }
+  const initial = await getStore();
   // Story yang udah dilihat visitor (dari cookie) -> render ring abu saat SSR.
   let initialViewed: string[] = [];
   try {
