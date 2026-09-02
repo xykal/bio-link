@@ -30,15 +30,20 @@ export async function generateMetadata(): Promise<Metadata> {
   const profile = store?.profile;
   const title = seo?.title || profile?.name || "Bio Link";
   const description = seo?.description || profile?.bio || "";
-  const icons: Metadata["icons"] = seo?.favicon ? { icon: optImg(seo.favicon, { w: 96, h: 96, crop: "fill" }) } : undefined;
-  const ogImages = seo?.ogImage ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }] : undefined;
+  // Favicon & OG default: asset AI di /public; bisa di-override lewat admin (seo).
+  const icons: Metadata["icons"] = seo?.favicon
+    ? { icon: optImg(seo.favicon, { w: 96, h: 96, crop: "fill" }) }
+    : [{ url: "/favicon.png", type: "image/png" }];
+  const ogImages = seo?.ogImage
+    ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }]
+    : [{ url: "https://bio.haekal.web.id/og-default.png", width: 1200, height: 630, alt: title }];
 
   return {
     title,
     description,
     icons,
     // Marker deploy: biar gampang ngecek build mana yang live di prod.
-    other: { "x-build": "r12c-mic-guard" },
+    other: { "x-build": "r13-rt" },
     openGraph: {
       title,
       description,

@@ -115,6 +115,29 @@ function rulesOriginOf(url?: string): string {
   }
 }
 
+// Tinggi bar waveform deterministik per story (konsisten antar render).
+function waveBars(id: string, n = 28): number[] {
+  let x = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    x ^= id.charCodeAt(i);
+    x = Math.imul(x, 16777619) >>> 0;
+  }
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    x ^= x << 13;
+    x >>>= 0;
+    x ^= x >> 17;
+    x ^= x << 5;
+    x >>>= 0;
+    out.push(6 + (x % 21));
+  }
+  return out;
+}
+function fmtTime(s: number): string {
+  const t = Math.max(0, Math.round(s || 0));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
+
 function toPublic(s: Store): PublicData {
   return {
     profile: s.profile,
@@ -372,6 +395,14 @@ export default function BioPage({
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState("");
   const [floating, setFloating] = useState<{ key: string; name: string; text: string }[]>([]);
+  // Player voice note ala WA
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioTime, setAudioTime] = useState(0);
+  const [audioDur, setAudioDur] = useState<number | null>(null);
+  // Komentar yang udah pernah jadi floating (cegah duplikat saat polling).
+  const knownFloatRef = useRef<Record<string, Set<string>>>({});
+  const activeStoryIdRef = useRef<string | null>(null);
 
   // Semua setState terjadi di callback promise (asinkron) -> aman untuk aturan
   // react-hooks/set-state-in-effect (React Compiler, Next 16).
@@ -445,6 +476,89 @@ export default function BioPage({
       .catch(applyLocal);
   }, [visitorId]);
 
+  // Reset player voice note tiap ganti story (dipanggil dari handler navigasi,
+  // bukan effect — sesuai aturan set-state-in-effect).
+  function resetAudio() {
+    setAudioDur(null);
+    setAudioTime(0);
+    setAudioPlaying(false);
+  }
+
+  // Buka story: komentar yang udah ada SELALU ikut melayang (stagger), lalu
+  // tandai biar polling gak nge-float ulang.
+  useEffect(() => {
+    if (storyIndex === null) return;
+    const st = (data?.stories || [])[storyIndex];
+    if (!st) return;
+    activeStoryIdRef.current = st.id;
+    const known = (knownFloatRef.current[st.id] ||= new Set());
+    const existing = (st.comments || []).slice(-3);
+    existing.forEach((c, i) => {
+      if (known.has(c.id)) return;
+      known.add(c.id);
+      window.setTimeout(() => pushFloating(c.name, c.text), 700 + i * 900);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyIndex]);
+
+  // Realtime: polling like + komentar selagi viewer terbuka; komentar baru
+  // dari pengunjung lain langsung melayang + jumlah like segar.
+  useEffect(() => {
+    if (storyIndex === null) return;
+    let alive = true;
+    const pull = () =>
+      fetch("/api/story/stats")
+        .then((r) => (r.ok ? r.json() : null))
+        .then(
+          (d: {
+            stats?: {
+              id: string;
+              likes: number;
+              comments: { id: string; name: string; text: string; at: number }[];
+            }[];
+          } | null) => {
+            if (!alive || !d?.stats) return;
+            setLikeMap((m) => {
+              const n = { ...m };
+              for (const s of d.stats || []) n[s.id] = s.likes;
+              return n;
+            });
+            setData((prev) => {
+              if (!prev) return prev;
+              const byId = new Map((d.stats || []).map((s) => [s.id, s]));
+              return {
+                ...prev,
+                stories: prev.stories.map((st) => {
+                  const r = byId.get(st.id);
+                  if (!r) return st;
+                  return { ...st, likes: r.likes, comments: r.comments };
+                }),
+              };
+            });
+            const sid = activeStoryIdRef.current;
+            if (sid) {
+              const r = (d.stats || []).find((s) => s.id === sid);
+              if (r) {
+                const known = (knownFloatRef.current[sid] ||= new Set());
+                for (const c of r.comments) {
+                  if (known.has(c.id)) continue;
+                  known.add(c.id);
+                  pushFloating(c.name, c.text);
+                }
+              }
+            }
+          }
+        )
+        .catch(() => {});
+    pull();
+    const id = window.setInterval(pull, 4000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyIndex === null]);
+
   // Long-press menahan story sementara; lepas = lanjut lagi.
   const beginPress = useCallback(() => {
     longPressed.current = false;
@@ -478,7 +592,8 @@ export default function BioPage({
       // Video maju sendiri lewat onEnded; progres lewat onTimeUpdate.
       return;
     }
-    const dur = Math.max(1, story.duration || 5) * 1000;
+    const durSec = story.type === "audio" && audioDur ? audioDur : story.duration || 5;
+    const dur = Math.max(1, durSec) * 1000;
     let elapsed = 0;
     const stepMs = 100;
     const id = setInterval(() => {
@@ -495,7 +610,11 @@ export default function BioPage({
       }
     }, stepMs);
     return () => clearInterval(id);
-  }, [storyIndex, data]);
+    // data sengaja tidak di-deps: polling mengganti identitas `data` tiap 4s
+    // dan bakal me-reset timer progres. Baca list story dari closure render
+    // saat story dibuka — cukup utk navigasi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyIndex, audioDur]);
 
   // Video: ikut ditahan saat long-press.
   useEffect(() => {
@@ -541,6 +660,7 @@ export default function BioPage({
     setStoryIndex(null);
     setStoryProgress(0);
     setFloating([]);
+    resetAudio();
   }
   function gotoStory(i: number) {
     if (i < 0) return;
@@ -554,12 +674,14 @@ export default function BioPage({
     setCommentOpen(false);
     setStoryProgress(0);
     setStoryIndex(i);
+    resetAudio();
   }
   function openStory() {
     pausedRef.current = false;
     setPaused(false);
     setStoryProgress(0);
     setStoryIndex(0);
+    resetAudio();
   }
 
   // Avatar: tap = buka story; tahan (long-press) = lihat foto profil penuh.
@@ -601,25 +723,48 @@ export default function BioPage({
     setFloating((f) => [...f.slice(-3), { key, name, text }]);
     setTimeout(() => setFloating((f) => f.filter((x) => x.key !== key)), 4200);
   }
+  type StoryT = Store["stories"][number];
+  function patchStory(storyId: string, patch: (st: StoryT) => StoryT) {
+    setData((prev) =>
+      prev
+        ? { ...prev, stories: prev.stories.map((st) => (st.id === storyId ? patch(st) : st)) }
+        : prev
+    );
+  }
+
   async function sendComment(e: React.FormEvent) {
     e.preventDefault();
     if (!activeStory) return;
     const text = commentText.trim();
     if (!text) return;
     const name = visitorName; // nama anonim, konsisten per pengunjung (dari DB)
+    const sid = activeStory.id;
     setCommentText("");
     pushFloating(name, text);
+    // Optimis: komen LANGSUNG muncul di daftar tanpa nunggu server.
+    const tmpId = `tmp-${Date.now()}`;
+    (knownFloatRef.current[sid] ||= new Set()).add(tmpId);
+    patchStory(sid, (st) => ({
+      ...st,
+      comments: [...(st.comments || []), { id: tmpId, name, text, at: Date.now() }],
+    }));
     try {
       const r = await fetch("/api/story/comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyId: activeStory.id, text, visitorId }),
+        body: JSON.stringify({ storyId: sid, text, visitorId }),
       });
       if (r.ok) {
         const d = await r.json();
         if (d?.comment?.name) {
           // pakai nama resmi dari DB biar konsisten
           setVisitorName(d.comment.name);
+        }
+        // Sinkronkan daftar resmi dari server (ganti entry optimis).
+        if (Array.isArray(d.comments)) {
+          const known = (knownFloatRef.current[sid] ||= new Set());
+          for (const c of d.comments as { id: string }[]) known.add(c.id);
+          patchStory(sid, (st) => ({ ...st, comments: d.comments }));
         }
       }
     } catch {
@@ -1215,7 +1360,7 @@ export default function BioPage({
           role="dialog"
           aria-modal="true"
         >
-          <div className="relative h-full w-full max-w-md overflow-hidden bg-black sm:h-[92vh] sm:rounded-2xl">
+          <div className="relative h-full w-full overflow-hidden bg-black sm:aspect-[9/16] sm:h-[92vh] sm:w-auto sm:max-w-[94vw] sm:rounded-2xl">
             {/* bar progres per story; yang udah dilihat jadi abu-abu */}
             <div className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-2">
               {stories.map((s, i) => (
@@ -1235,10 +1380,35 @@ export default function BioPage({
               ))}
             </div>
 
+            {/* profil kiri-atas: avatar + nama ambil dari bio profile */}
+            {profile && (
+              <div className="pointer-events-none absolute left-3 top-5 z-30 flex items-center gap-2">
+                {profile.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatar}
+                    alt={profile.name}
+                    className="h-8 w-8 rounded-full border-2 object-cover"
+                    style={{ borderColor: accent, objectPosition: avatarPos }}
+                  />
+                ) : (
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ background: accent }}
+                  >
+                    {(profile.name || "B").slice(0, 1)}
+                  </span>
+                )}
+                <span className="text-sm font-semibold text-white drop-shadow">
+                  {profile.name}
+                </span>
+              </div>
+            )}
+
             {/* tutup */}
             <button
               onClick={closeStory}
-              className="absolute right-3 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
+              className="absolute right-3 top-5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
               aria-label="Tutup story"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1293,25 +1463,6 @@ export default function BioPage({
                     activeStory.bg || `linear-gradient(135deg, ${accent}, ${accent}88)`,
                 }}
               >
-                {/* visual gelombang statis ala voice note */}
-                <div className="flex h-20 items-end gap-1.5" aria-hidden>
-                  {[6, 12, 20, 30, 22, 34, 16, 26, 10, 18, 28, 14, 24, 8, 20, 12].map(
-                    (h, i) => (
-                      <span
-                        key={i}
-                        className="w-1.5 rounded-full bg-white/85"
-                        style={{ height: `${h * 2}px`, opacity: 0.55 + (i % 4) * 0.12 }}
-                      />
-                    )
-                  )}
-                </div>
-                <audio
-                  key={activeStory.id}
-                  src={activeStory.media}
-                  controls
-                  autoPlay
-                  className="w-full max-w-xs"
-                />
                 {activeStory.text && (
                   <p
                     className="max-w-xs text-center text-lg font-semibold leading-snug text-white drop-shadow"
@@ -1320,6 +1471,81 @@ export default function BioPage({
                     {activeStory.text}
                   </p>
                 )}
+                {/* player voice note gaya WA: tombol putar + waveform + mic */}
+                <div className="w-full max-w-sm rounded-2xl bg-black/45 p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const a = audioRef.current;
+                        if (!a) return;
+                        if (audioPlaying) a.pause();
+                        else void a.play().catch(() => {});
+                      }}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+                      style={{ background: accent }}
+                      aria-label={audioPlaying ? "Jeda voice note" : "Putar voice note"}
+                    >
+                      {audioPlaying ? (
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                          <path d="M8 5h3v14H8zM13 5h3v14h-3z" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex h-8 items-center gap-[3px]" aria-hidden>
+                        {waveBars(activeStory.id).map((h, i) => {
+                          const total = audioDur || activeStory.duration || 15;
+                          const played = audioDur ? audioTime / total : 0;
+                          const on = i / waveBars(activeStory.id).length <= played;
+                          return (
+                            <span
+                              key={i}
+                              className="flex-1 rounded-full"
+                              style={{
+                                height: `${h}px`,
+                                background: on ? "#fff" : "rgba(255,255,255,0.35)",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="mt-1 flex justify-between text-[11px] font-medium text-white/70">
+                        <span>{fmtTime(audioTime)}</span>
+                        <span>{fmtTime(audioDur || activeStory.duration || 15)}</span>
+                      </div>
+                    </div>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-6 w-6 shrink-0 text-white/80"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+                    </svg>
+                  </div>
+                </div>
+                <audio
+                  key={activeStory.id}
+                  ref={audioRef}
+                  src={activeStory.media}
+                  preload="metadata"
+                  onLoadedMetadata={(e) => {
+                    const d = e.currentTarget.duration;
+                    if (d && Number.isFinite(d)) setAudioDur(d);
+                  }}
+                  onTimeUpdate={(e) => setAudioTime(e.currentTarget.currentTime)}
+                  onPlay={() => setAudioPlaying(true)}
+                  onPause={() => setAudioPlaying(false)}
+                  onEnded={() => gotoStory((storyIndex ?? 0) + 1)}
+                  className="hidden"
+                />
               </div>
             ) : activeStory.type === "image" && activeStory.media ? (
               // eslint-disable-next-line @next/next/no-img-element
