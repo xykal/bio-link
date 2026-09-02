@@ -414,10 +414,15 @@ export default function BioPage({
   const [likeMap, setLikeMap] = useState<Record<string, number>>({});
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState("");
-  const [floating, setFloating] = useState<{ key: string; name: string; text: string }[]>([]);
+  const [floating, setFloating] = useState<
+    { key: string; name: string; text: string; sid: string }[]
+  >([]);
+  // Timer stagger floating yg belum sempat jalan (dibatalkan pas ganti story).
+  const floatTimersRef = useRef<number[]>([]);
   // Player voice note ala WA
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioPlayingRef = useRef(false); // buat gate timer tanpa re-run effect
   const [audioTime, setAudioTime] = useState(0);
   const [audioDur, setAudioDur] = useState<number | null>(null);
   // Komentar yang udah pernah jadi floating (cegah duplikat saat polling).
@@ -513,9 +518,12 @@ export default function BioPage({
     activeStoryIdRef.current = st.id;
     const known = new Set<string>((st.comments || []).map((c) => c.id));
     knownFloatRef.current[st.id] = known;
-    (st.comments || []).slice(-3).forEach((c, i) => {
-      window.setTimeout(() => pushFloating(c.name, c.text), 700 + i * 900);
-    });
+    clearFloatTimers();
+    floatTimersRef.current = (st.comments || [])
+      .slice(-3)
+      .map((c, i) =>
+        window.setTimeout(() => pushFloating(c.name, c.text, st.id), 700 + i * 900)
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyIndex]);
 
@@ -561,7 +569,7 @@ export default function BioPage({
                 for (const c of r.comments) {
                   if (known.has(c.id)) continue;
                   known.add(c.id);
-                  pushFloating(c.name, c.text);
+                  pushFloating(c.name, c.text, sid);
                 }
               }
             }
@@ -616,6 +624,8 @@ export default function BioPage({
     const stepMs = 100;
     const id = setInterval(() => {
       if (pausedRef.current) return; // ditahan (long-press)
+      // VN: progres & auto-advance JALAN cuma kalau audionya lagi diputar.
+      if (story.type === "audio" && !audioPlayingRef.current) return;
       elapsed += stepMs;
       setStoryProgress(Math.min(100, (elapsed / dur) * 100));
       if (elapsed >= dur) {
@@ -634,12 +644,14 @@ export default function BioPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyIndex, audioDur]);
 
-  // Video: ikut ditahan saat long-press.
+  // Video & audio: ikut ditahan saat long-press.
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (paused) v.pause();
-    else void v.play().catch(() => {});
+    if (v) {
+      if (paused) v.pause();
+      else void v.play().catch(() => {});
+    }
+    if (paused) audioRef.current?.pause();
   }, [paused, storyIndex]);
 
   // Tandai story sudah dilihat -> garis/segmen jadi abu-abu (disimpan lokal).
@@ -678,6 +690,7 @@ export default function BioPage({
     setStoryIndex(null);
     setStoryProgress(0);
     setFloating([]);
+    clearFloatTimers();
     resetAudio();
   }
   function gotoStory(i: number) {
@@ -692,6 +705,7 @@ export default function BioPage({
     setCommentOpen(false);
     setStoryProgress(0);
     setFloating([]); // floating story sebelumnya jangan nempel ke story baru
+    clearFloatTimers();
     setStoryIndex(i);
     resetAudio();
   }
@@ -737,10 +751,14 @@ export default function BioPage({
       /* ignore */
     }
   }
-  function pushFloating(name: string, text: string) {
+  function pushFloating(name: string, text: string, sid: string) {
     const key = crypto.randomUUID();
-    setFloating((f) => [...f.slice(-3), { key, name, text }]);
+    setFloating((f) => [...f.slice(-3), { key, name, text, sid }]);
     setTimeout(() => setFloating((f) => f.filter((x) => x.key !== key)), 4200);
+  }
+  function clearFloatTimers() {
+    floatTimersRef.current.forEach((t) => window.clearTimeout(t));
+    floatTimersRef.current = [];
   }
   type StoryT = Store["stories"][number];
   function patchStory(storyId: string, patch: (st: StoryT) => StoryT) {
@@ -759,7 +777,7 @@ export default function BioPage({
     const name = visitorName; // nama anonim, konsisten per pengunjung (dari DB)
     const sid = activeStory.id;
     setCommentText("");
-    pushFloating(name, text);
+    pushFloating(name, text, sid);
     // Optimis: komen LANGSUNG muncul di daftar tanpa nunggu server.
     const tmpId = `tmp-${Date.now()}`;
     (knownFloatRef.current[sid] ||= new Set()).add(tmpId);
@@ -1562,8 +1580,14 @@ export default function BioPage({
                     if (d && Number.isFinite(d)) setAudioDur(d);
                   }}
                   onTimeUpdate={(e) => setAudioTime(e.currentTarget.currentTime)}
-                  onPlay={() => setAudioPlaying(true)}
-                  onPause={() => setAudioPlaying(false)}
+                  onPlay={() => {
+                    audioPlayingRef.current = true;
+                    setAudioPlaying(true);
+                  }}
+                  onPause={() => {
+                    audioPlayingRef.current = false;
+                    setAudioPlaying(false);
+                  }}
                   onEnded={() => gotoStory((storyIndex ?? 0) + 1)}
                   className="hidden"
                 />
@@ -1636,9 +1660,11 @@ export default function BioPage({
               </div>
             )}
 
-            {/* komentar melayang di kanan-bawah */}
+            {/* komentar melayang di kanan-bawah — HANYA milik story aktif */}
             <div className="pointer-events-none absolute bottom-24 right-3 z-20 flex w-48 flex-col items-end gap-1.5">
-              {floating.map((c) => (
+              {floating
+                .filter((c) => c.sid === activeStory.id)
+                .map((c) => (
                 <div
                   key={c.key}
                   className="animate-float-up max-w-full rounded-2xl rounded-br-sm bg-black/60 px-3 py-2 text-xs text-white backdrop-blur-sm"

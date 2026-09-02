@@ -43,7 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     icons,
     // Marker deploy: biar gampang ngecek build mana yang live di prod.
-    other: { "x-build": "r14-vn-fix" },
+    other: { "x-build": "r15-float-vn" },
     openGraph: {
       title,
       description,
