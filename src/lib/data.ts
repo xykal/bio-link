@@ -525,7 +525,7 @@ export function normalize(parsed: Partial<Store>): Store {
 //  Cloudflare D1
 // ---------------------------------------------------------------------------
 type D1ResultSet = { results?: Array<Record<string, unknown>> };
-async function d1Query(sql: string): Promise<D1ResultSet[]> {
+async function d1QueryOnce(sql: string): Promise<D1ResultSet[]> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/d1/database/${CF_DB}/query`;
   const res = await fetch(url, {
     method: "POST",
@@ -535,6 +535,20 @@ async function d1Query(sql: string): Promise<D1ResultSet[]> {
   const json = await res.json();
   if (!json.success) throw new Error(`D1 error: ${JSON.stringify(json.errors || json)}`);
   return json.result;
+}
+// D1 kadang balik "internal error" sesaat (blip Cloudflare). Retry beberapa kali
+// biar halaman gak 500 cuma karena gangguan sepersekian detik.
+async function d1Query(sql: string): Promise<D1ResultSet[]> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await d1QueryOnce(sql);
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function d1Read(): Promise<Store> {
