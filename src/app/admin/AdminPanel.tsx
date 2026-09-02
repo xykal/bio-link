@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon, ICON_KEYS } from "@/components/Icons";
 import { FONT_KEYS, FONTS, fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
@@ -39,6 +39,7 @@ const SHAPES: { key: ProfileShape; label: string }[] = [
   { key: "abstract", label: "Abstract" },
   { key: "star", label: "Star" },
   { key: "heart", label: "Heart" },
+  { key: "custom", label: "Custom (gambar)" },
 ];
 
 const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
@@ -213,6 +214,8 @@ export default function AdminPanel() {
   });
   const [sections, setSections] = useState<Sections>({ stack: true, team: true });
   const [stories, setStories] = useState<Story[]>([]);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
   const [view, setView] = useState<NavKey>("profil");
   const [stats, setStats] = useState<StatsResp | null>(null);
   const [team, setTeam] = useState<Member[]>([]);
@@ -596,39 +599,69 @@ export default function AdminPanel() {
     return d.url;
   }
 
-  // Upload LANGSUNG ke Cloudinary (browser -> Cloudinary). Dipakai untuk story
-  // foto/video: file besar tak lewat function, jadi video tidak kena limit body.
-  async function uploadDirect(folder: string, file: File): Promise<string | null> {
-    try {
-      const sr = await fetch("/api/upload/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder }),
-      });
-      const s = await sr.json().catch(() => ({}));
-      if (!sr.ok || !s.cloudName) {
-        flash(s.error || "Gagal menyiapkan upload", false);
-        return null;
-      }
+  // Upload LANGSUNG ke Cloudinary (browser -> Cloudinary) pakai XHR agar bisa
+  // memantau progres. Dipakai untuk story foto/video: file besar tak lewat
+  // function, jadi video tidak kena limit body serverless.
+  async function uploadDirect(
+    folder: string,
+    file: File,
+    onProgress?: (pct: number) => void
+  ): Promise<string> {
+    const sr = await fetch("/api/upload/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder }),
+    });
+    const s = await sr.json().catch(() => ({}));
+    if (!sr.ok || !s.cloudName) {
+      throw new Error(s.error || "Gagal menyiapkan upload (Cloudinary?)");
+    }
+    return new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
       const fd = new FormData();
       fd.set("file", file);
       fd.set("folder", s.folder);
       fd.set("timestamp", String(s.timestamp));
       fd.set("api_key", s.apiKey);
       fd.set("signature", s.signature);
-      const up = await fetch(
-        `https://api.cloudinary.com/v1_1/${s.cloudName}/auto/upload`,
-        { method: "POST", body: fd }
-      );
-      const d = await up.json().catch(() => ({}));
-      if (!d.secure_url) {
-        flash(d.error?.message || "Upload gagal", false);
-        return null;
-      }
-      return d.secure_url as string;
-    } catch {
-      flash("Upload gagal", false);
-      return null;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        let d: { secure_url?: string; error?: { message?: string } } = {};
+        try {
+          d = JSON.parse(xhr.responseText);
+        } catch {
+          /* ignore */
+        }
+        if (xhr.status >= 200 && xhr.status < 300 && d.secure_url) {
+          resolve(d.secure_url);
+        } else {
+          reject(new Error(d.error?.message || `Upload gagal (HTTP ${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Koneksi upload terputus"));
+      xhr.ontimeout = () => reject(new Error("Upload memakan waktu terlalu lama"));
+      xhr.open("POST", `https://api.cloudinary.com/v1_1/${s.cloudName}/auto/upload`);
+      xhr.send(fd);
+    });
+  }
+
+  // Bungkus upload story: atur state progres + flash hasil.
+  async function uploadStoryMedia(storyId: string, file: File) {
+    setUploadingId(storyId);
+    setUploadPct(0);
+    try {
+      const url = await uploadDirect("bio-link/story", file, (p) => setUploadPct(p));
+      updateStory(storyId, { media: url });
+      flash("Upload selesai");
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "Upload gagal", false);
+    } finally {
+      setUploadingId(null);
+      setUploadPct(0);
     }
   }
 
@@ -974,6 +1007,18 @@ export default function AdminPanel() {
                   ))}
                 </div>
               </Field>
+
+              {profile.shape === "custom" && (
+                <Field
+                  label="Gambar bentuk bebas"
+                  hint="Gambar bentuk apa saja di kotak dengan mouse/jari, lalu klik “Simpan bentuk”. Tanpa batasan."
+                >
+                  <ShapeDrawField
+                    value={profile.customShape || ""}
+                    onSave={(path) => setProfile({ ...profile, customShape: path })}
+                  />
+                </Field>
+              )}
 
               <Field label="Warna aksen">
                 <div className="flex flex-wrap gap-2">
@@ -1558,14 +1603,27 @@ export default function AdminPanel() {
                             type="file"
                             accept={st.type === "video" ? "video/*" : "image/*"}
                             className="hidden"
-                            onChange={async (e) => {
+                            onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (!f) return;
-                              const url = await uploadDirect("bio-link/story", f);
-                              if (url) updateStory(st.id, { media: url });
+                              void uploadStoryMedia(st.id, f);
+                              e.target.value = "";
                             }}
                           />
                         </label>
+                        {uploadingId === st.id && (
+                          <div className="space-y-1">
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-[width]"
+                                style={{ width: `${uploadPct}%` }}
+                              />
+                            </div>
+                            <p className="text-[11px] text-white/50">
+                              Mengupload... {uploadPct}%
+                            </p>
+                          </div>
+                        )}
                         <input
                           className={inputCls}
                           value={st.text}
@@ -1962,6 +2020,152 @@ function Spinner({ small }: { small?: boolean }) {
       }`}
       aria-label="Memuat"
     />
+  );
+}
+
+function ShapeDrawField({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (path: string) => void;
+}) {
+  const SIZE = 240;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ptsRef = useRef<{ x: number; y: number }[]>([]);
+  const drawingRef = useRef(false);
+  const [saved, setSaved] = useState(false);
+
+  const paintStroke = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo((SIZE / 4) * i, 0);
+      ctx.lineTo((SIZE / 4) * i, SIZE);
+      ctx.moveTo(0, (SIZE / 4) * i);
+      ctx.lineTo(SIZE, (SIZE / 4) * i);
+      ctx.stroke();
+    }
+    const pts = ptsRef.current;
+    if (pts.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(139,92,246,0.30)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(167,139,250,0.95)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }, []);
+
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ptsRef.current = [];
+    paintStroke();
+    if (value) {
+      try {
+        const p2d = new Path2D(value);
+        ctx.save();
+        ctx.scale(SIZE, SIZE);
+        ctx.fillStyle = "rgba(139,92,246,0.30)";
+        ctx.fill(p2d);
+        ctx.strokeStyle = "rgba(167,139,250,0.95)";
+        ctx.lineWidth = 2 / SIZE;
+        ctx.stroke(p2d);
+        ctx.restore();
+      } catch {
+        /* path tak valid: abaikan */
+      }
+    }
+  }, [value, paintStroke]);
+
+  function posOf(e: React.PointerEvent<HTMLCanvasElement>) {
+    const c = canvasRef.current!;
+    const r = c.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) / r.width) * SIZE,
+      y: ((e.clientY - r.top) / r.height) * SIZE,
+    };
+  }
+  function start(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drawingRef.current = true;
+    setSaved(false);
+    ptsRef.current = [posOf(e)];
+    paintStroke();
+  }
+  function move(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+    ptsRef.current.push(posOf(e));
+    paintStroke();
+  }
+  function end() {
+    drawingRef.current = false;
+  }
+  function buildPath() {
+    const pts = ptsRef.current;
+    if (pts.length < 3) return "";
+    const step = Math.max(1, Math.floor(pts.length / 100));
+    const sampled = pts.filter((_, i) => i % step === 0);
+    const norm = sampled.map(
+      (p) => `${(p.x / SIZE).toFixed(4)} ${(p.y / SIZE).toFixed(4)}`
+    );
+    return `M ${norm.join(" L ")} Z`;
+  }
+
+  return (
+    <div className="space-y-2">
+      <canvas
+        ref={canvasRef}
+        width={SIZE}
+        height={SIZE}
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        className="w-full max-w-[240px] touch-none rounded-xl border border-white/15 bg-black/40"
+        style={{ aspectRatio: "1 / 1" }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const p = buildPath();
+            if (p) {
+              onSave(p);
+              setSaved(true);
+            }
+          }}
+          className={btnCls}
+        >
+          Simpan bentuk
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            ptsRef.current = [];
+            paintStroke();
+            setSaved(false);
+          }}
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:text-white"
+        >
+          Hapus gambar
+        </button>
+        {saved && <span className="text-xs text-emerald-300">Bentuk tersimpan</span>}
+      </div>
+    </div>
   );
 }
 

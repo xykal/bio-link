@@ -27,7 +27,8 @@ export type ProfileShape =
   | "octagon"
   | "diamond"
   | "leaf"
-  | "shield";
+  | "shield"
+  | "custom";
 
 // Bentuk tombol link di halaman publik
 export type LinkShape = "pill" | "rounded" | "soft" | "square";
@@ -140,6 +141,7 @@ export type Profile = {
   accent: string; // theme accent color
   shape: ProfileShape;
   avatarPos?: string; // object-position foto avatar, mis. "50% 20%"
+  customShape?: string; // SVG path (koordinat 0..1) utk shape="custom"
 };
 
 export type Socials = {
@@ -239,6 +241,7 @@ const DEFAULT_STORE: Store = {
     accent: "#8b5cf6",
     shape: "circle",
     avatarPos: "50% 50%",
+    customShape: "",
   },
   links: [
     {
@@ -346,6 +349,10 @@ export function normalize(parsed: Partial<Store>): Store {
         typeof (parsed.profile || {}).avatarPos === "string"
           ? (parsed.profile as Profile).avatarPos
           : d.profile.avatarPos,
+      customShape:
+        typeof (parsed.profile || {}).customShape === "string"
+          ? ((parsed.profile as Profile).customShape || "").slice(0, 8000)
+          : "",
     },
     links: Array.isArray(parsed.links)
       ? parsed.links.map((l) => ({

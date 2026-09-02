@@ -434,6 +434,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const isLight = data?.theme === "light";
   const avatarPos = profile?.avatarPos || "50% 50%";
   const shape = profile?.shape || "circle";
+  const customShape = profile?.customShape || "";
+  const isCustomShape = shape === "custom" && customShape.length > 0;
   const linkRadius = LINK_RADIUS[data?.linkShape || "rounded"] ?? 16;
   const ringColor = isLight ? "#f7f7f9" : "#08080d";
   const stack = data?.stack || [];
@@ -445,6 +447,12 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const stories = data?.stories || [];
   const hasStories = stories.length > 0;
   const activeStory = storyIndex !== null ? stories[storyIndex] : null;
+  // Ring story: 1 story = cincin utuh; >1 = tersegmentasi (putus-putus) ala IG.
+  const storyCount = stories.length;
+  const RING_R = 54;
+  const RING_GAP = storyCount > 1 ? 9 : 0;
+  const RING_SEG =
+    (2 * Math.PI * RING_R - storyCount * RING_GAP) / Math.max(1, storyCount);
   const stackJustify =
     data?.stackAlign === "left"
       ? "justify-start"
@@ -523,20 +531,51 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               }
               style={{ width: 108, height: 108 }}
             >
-              {/* Ring story ala IG: muncul hanya kalau ada story */}
+              {/* Ring story ala IG: gradasi ungu; tersegmentasi kalau story > 1 */}
               {hasStories && (
-                <div
+                <svg
                   aria-hidden
-                  className="pointer-events-none absolute -inset-[3px] rounded-full"
-                  style={{
-                    background:
-                      "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                  }}
-                />
+                  className="pointer-events-none absolute -inset-[3px]"
+                  viewBox="0 0 114 114"
+                  width="114"
+                  height="114"
+                >
+                  <defs>
+                    <linearGradient id="bio-story-ring" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#c084fc" />
+                      <stop offset="50%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#e879f9" />
+                    </linearGradient>
+                  </defs>
+                  <circle
+                    cx="57"
+                    cy="57"
+                    r={RING_R}
+                    fill="none"
+                    stroke="url(#bio-story-ring)"
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeDasharray={storyCount > 1 ? `${RING_SEG} ${RING_GAP}` : undefined}
+                    transform="rotate(-90 57 57)"
+                  />
+                </svg>
+              )}
+              {/* clip-path bebas (shape custom dari editor gambar) */}
+              {isCustomShape && (
+                <svg width="0" height="0" className="absolute" aria-hidden focusable="false">
+                  <defs>
+                    <clipPath id="bio-avatar-clip" clipPathUnits="objectBoundingBox">
+                      <path d={customShape} />
+                    </clipPath>
+                  </defs>
+                </svg>
               )}
               {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
               <div
-                className={`avatar-frame shape-${shape} relative h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
+                className={`avatar-frame ${
+                  isCustomShape ? "" : `shape-${shape}`
+                } relative h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
+                style={isCustomShape ? { clipPath: "url(#bio-avatar-clip)" } : undefined}
                 onClick={() =>
                   hasStories ? openStory() : setShowAvatarPreview((v) => !v)
                 }

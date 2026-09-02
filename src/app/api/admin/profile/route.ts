@@ -26,9 +26,18 @@ export async function PATCH(req: Request) {
       "hexagon",
       "star",
       "heart",
+      "octagon",
+      "diamond",
+      "leaf",
+      "shield",
+      "custom",
     ].includes(body.shape as string)
   ) {
     store.profile.shape = body.shape;
+  }
+  // Path SVG utk bentuk bebas (shape="custom"). Koordinat 0..1.
+  if (typeof body.customShape === "string") {
+    store.profile.customShape = body.customShape.slice(0, 8000);
   }
   // Posisi crop avatar (object-position). Hanya izinkan pola aman:
   // keyword dan/atau persentase, mis. "50% 100%" atau "center top".
