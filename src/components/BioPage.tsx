@@ -673,6 +673,7 @@ export default function BioPage({
     setPaused(false);
     setCommentOpen(false);
     setStoryProgress(0);
+    setFloating([]); // floating story sebelumnya jangan nempel ke story baru
     setStoryIndex(i);
     resetAudio();
   }
