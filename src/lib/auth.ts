@@ -45,6 +45,7 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export function createSessionCookie() {
+  const isProd = process.env.NODE_ENV === "production";
   const expB64 = Buffer.from(
     String(Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS)
   ).toString("base64url");
@@ -52,10 +53,12 @@ export function createSessionCookie() {
     name: SESSION_COOKIE,
     value: `${expB64}.${sign(expB64)}`,
     httpOnly: true,
-    sameSite: "lax" as const,
+    // Di production pakai SameSite=None+Secure supaya sesi bertahan walau admin
+    // dibuka lewat iframe preview (konteks cross-site). Di dev (http) tetap lax.
+    sameSite: isProd ? ("none" as const) : ("lax" as const),
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProd,
   };
 }
 

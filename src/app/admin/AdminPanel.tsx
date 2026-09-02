@@ -374,8 +374,18 @@ export default function AdminPanel() {
         if (blob.size > 0) void uploadStoryMedia(storyId, file, dur);
       };
       rec.start();
-    } catch {
-      flash("Gagal mengakses mikrofon (izin ditolak?)", false);
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        flash(
+          "Izin mikrofon ditolak. Klik ikon kunci/gembok di address bar, izinkan Mikrofon, lalu pencet Rekam lagi. (Kalau masih gagal, pakai tombol Upload audio.)",
+          false
+        );
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        flash("Mikrofon tidak ditemukan di perangkat ini. Pakai tombol Upload audio.", false);
+      } else {
+        flash("Gagal mengakses mikrofon. Coba lagi atau pakai Upload audio.", false);
+      }
     }
   }
   function stopRecording() {

@@ -57,6 +57,41 @@ function trackLinkClick(id: string, title: string) {
   }).catch(() => {});
 }
 
+const VISITOR_KEY = "bio_visitor_name";
+const VIEWED_KEY = "bio_viewed_stories";
+
+const INDO_NAMES = [
+  "Asep", "Budi", "Citra", "Dewi", "Eko", "Fitri", "Gilang", "Hana",
+  "Intan", "Joko", "Kirana", "Lia", "Maya", "Nanda", "Putri", "Raka",
+  "Sari", "Tono", "Vina", "Wati", "Yoga", "Zahra", "Agus", "Bella",
+];
+
+// Nama anonim acak per pengunjung (disimpan, jadi tetap sama tiap kunjungan).
+function getVisitorName(): string {
+  if (typeof window === "undefined") return "Anon";
+  try {
+    const saved = localStorage.getItem(VISITOR_KEY);
+    if (saved) return saved;
+    const name =
+      INDO_NAMES[Math.floor(Math.random() * INDO_NAMES.length)] +
+      String(Math.floor(Math.random() * 900) + 100);
+    localStorage.setItem(VISITOR_KEY, name);
+    return name;
+  } catch {
+    return "Anon";
+  }
+}
+
+function readViewed(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const arr = JSON.parse(localStorage.getItem(VIEWED_KEY) || "[]") as string[];
+    return Object.fromEntries(arr.map((id) => [id, true]));
+  } catch {
+    return {};
+  }
+}
+
 function rulesOriginOf(url?: string): string {
   try {
     return new URL(url || "https://rules.xyc.my.id/").origin;
@@ -297,14 +332,18 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const [storyProgress, setStoryProgress] = useState(0);
   const [paused, setPaused] = useState(false); // long-press = tahan sementara
   const [muted, setMuted] = useState(true); // video mulai muted (aturan autoplay)
+  const [commentOpen, setCommentOpen] = useState(false); // bottom sheet komen
+  const [visitorName] = useState(getVisitorName);
+  const [viewedSet, setViewedSet] = useState<Record<string, boolean>>(readViewed);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const pausedRef = useRef(false);
+  const avatarPressTimer = useRef<number | null>(null);
+  const avatarLong = useRef(false);
   const [likeMap, setLikeMap] = useState<Record<string, number>>({});
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState("");
-  const [commentName, setCommentName] = useState("");
   const [floating, setFloating] = useState<{ key: string; name: string; text: string }[]>([]);
 
   // Semua setState terjadi di callback promise (asinkron) -> aman untuk aturan
@@ -394,6 +433,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       if (elapsed >= dur) {
         clearInterval(id);
         setStoryProgress(0);
+        markViewed(story.id);
         setStoryIndex((cur) =>
           cur === null ? null : cur + 1 < list.length ? cur + 1 : null
         );
@@ -410,9 +450,29 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     else void v.play().catch(() => {});
   }, [paused, storyIndex]);
 
+  // Tandai story sudah dilihat -> garis/segmen jadi abu-abu (disimpan lokal).
+  function markViewed(id?: string) {
+    if (!id) return;
+    setViewedSet((prev) => {
+      if (prev[id]) return prev;
+      const next = { ...prev, [id]: true };
+      try {
+        localStorage.setItem(VIEWED_KEY, JSON.stringify(Object.keys(next)));
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  }
+  function currentStoryId() {
+    return storyIndex !== null ? (data?.stories || [])[storyIndex]?.id : undefined;
+  }
+
   function closeStory() {
+    markViewed(currentStoryId());
     pausedRef.current = false;
     setPaused(false);
+    setCommentOpen(false);
     setStoryIndex(null);
     setStoryProgress(0);
     setFloating([]);
@@ -423,8 +483,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       closeStory();
       return;
     }
+    markViewed(currentStoryId());
     pausedRef.current = false;
     setPaused(false);
+    setCommentOpen(false);
     setStoryProgress(0);
     setStoryIndex(i);
   }
@@ -433,6 +495,23 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     setPaused(false);
     setStoryProgress(0);
     setStoryIndex(0);
+  }
+
+  // Avatar: tap = buka story; tahan (long-press) = lihat foto profil penuh.
+  function avatarDown() {
+    if (!hasStories) return;
+    avatarLong.current = false;
+    if (avatarPressTimer.current) window.clearTimeout(avatarPressTimer.current);
+    avatarPressTimer.current = window.setTimeout(() => {
+      avatarLong.current = true;
+      setShowAvatarPreview(true);
+    }, 350);
+  }
+  function avatarUp() {
+    if (avatarPressTimer.current) {
+      window.clearTimeout(avatarPressTimer.current);
+      avatarPressTimer.current = null;
+    }
   }
   async function likeStory(id: string) {
     if (likedSet[id]) return;
@@ -463,7 +542,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     if (!activeStory) return;
     const text = commentText.trim();
     if (!text) return;
-    const name = commentName.trim() || "Anon";
+    const name = visitorName; // nama anonim acak, tetap sama per pengunjung
     setCommentText("");
     pushFloating(name, text);
     try {
@@ -475,6 +554,17 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     } catch {
       /* ignore */
     }
+  }
+
+  function openCommentSheet() {
+    pausedRef.current = true;
+    setPaused(true);
+    setCommentOpen(true);
+  }
+  function closeCommentSheet() {
+    setCommentOpen(false);
+    pausedRef.current = false;
+    setPaused(false);
   }
 
   function handleClick(e: React.MouseEvent, link: LinkItem) {
@@ -513,11 +603,15 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const hasStories = stories.length > 0;
   const activeStory = storyIndex !== null ? stories[storyIndex] : null;
   // Ring story: 1 story = cincin utuh; >1 = tersegmentasi (putus-putus) ala IG.
+  // Ring ditarik agak keluar (gap dari avatar) biar terlihat jelas.
   const storyCount = stories.length;
-  const RING_R = 54;
-  const RING_GAP = storyCount > 1 ? 9 : 0;
+  const RING_SIZE = 124;
+  const RING_C = RING_SIZE / 2;
+  const RING_R = 59;
+  const RING_CIRC = 2 * Math.PI * RING_R;
+  const RING_GAP = storyCount > 1 ? 10 : 0;
   const RING_SEG =
-    (2 * Math.PI * RING_R - storyCount * RING_GAP) / Math.max(1, storyCount);
+    (RING_CIRC - storyCount * RING_GAP) / Math.max(1, storyCount);
   const stackJustify =
     data?.stackAlign === "left"
       ? "justify-start"
@@ -600,10 +694,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
               {hasStories && (
                 <svg
                   aria-hidden
-                  className="pointer-events-none absolute -inset-[3px]"
-                  viewBox="0 0 114 114"
-                  width="114"
-                  height="114"
+                  className="ring-once pointer-events-none absolute -inset-2"
+                  viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+                  width={RING_SIZE}
+                  height={RING_SIZE}
                 >
                   <defs>
                     <linearGradient id="bio-story-ring" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -612,17 +706,33 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                       <stop offset="100%" stopColor="#e879f9" />
                     </linearGradient>
                   </defs>
-                  <circle
-                    cx="57"
-                    cy="57"
-                    r={RING_R}
-                    fill="none"
-                    stroke="url(#bio-story-ring)"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeDasharray={storyCount > 1 ? `${RING_SEG} ${RING_GAP}` : undefined}
-                    transform="rotate(-90 57 57)"
-                  />
+                  {stories.map((s, i) => (
+                    <circle
+                      key={s.id}
+                      cx={RING_C}
+                      cy={RING_C}
+                      r={RING_R}
+                      fill="none"
+                      stroke={
+                        viewedSet[s.id]
+                          ? isLight
+                            ? "rgba(113,113,122,0.45)"
+                            : "rgba(148,163,184,0.40)"
+                          : "url(#bio-story-ring)"
+                      }
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeDasharray={
+                        storyCount > 1
+                          ? `${RING_SEG} ${RING_CIRC - RING_SEG}`
+                          : undefined
+                      }
+                      strokeDashoffset={
+                        storyCount > 1 ? -(i * (RING_SEG + RING_GAP)) : undefined
+                      }
+                      transform={`rotate(-90 ${RING_C} ${RING_C})`}
+                    />
+                  ))}
                 </svg>
               )}
               {/* clip-path bebas (shape custom dari editor gambar) */}
@@ -641,12 +751,25 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                   isCustomShape ? "" : `shape-${shape}`
                 } relative h-full w-full cursor-pointer overflow-hidden shadow-[0_12px_40px_-14px_rgba(0,0,0,0.55)] select-none`}
                 style={isCustomShape ? { clipPath: "url(#bio-avatar-clip)" } : undefined}
-                onClick={() =>
-                  hasStories ? openStory() : setShowAvatarPreview((v) => !v)
-                }
+                onClick={() => {
+                  if (avatarLong.current) {
+                    avatarLong.current = false;
+                    return;
+                  }
+                  if (hasStories) openStory();
+                  else setShowAvatarPreview((v) => !v);
+                }}
+                onPointerDown={avatarDown}
+                onPointerUp={avatarUp}
+                onPointerLeave={avatarUp}
+                onPointerCancel={avatarUp}
                 role="button"
                 tabIndex={0}
-                aria-label={hasStories ? "Lihat story" : "Lihat foto profil"}
+                aria-label={
+                  hasStories
+                    ? "Lihat story (tahan untuk foto profil)"
+                    : "Lihat foto profil"
+                }
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -1022,12 +1145,12 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           aria-modal="true"
         >
           <div className="relative h-full w-full max-w-md overflow-hidden bg-black sm:h-[92vh] sm:rounded-2xl">
-            {/* bar progres per story */}
+            {/* bar progres per story; yang udah dilihat jadi abu-abu */}
             <div className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-2">
               {stories.map((s, i) => (
                 <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/25">
                   <div
-                    className="h-full bg-white"
+                    className={`h-full ${viewedSet[s.id] ? "bg-zinc-400/80" : "bg-white"}`}
                     style={{
                       width:
                         i < (storyIndex ?? 0)
@@ -1219,32 +1342,16 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <form onSubmit={sendComment} className="flex flex-1 items-center gap-2">
-                  <input
-                    value={commentName}
-                    onChange={(e) => setCommentName(e.target.value)}
-                    placeholder="Nama"
-                    maxLength={40}
-                    className="w-20 shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs text-white placeholder-white/40 outline-none focus:border-white/40"
-                  />
-                  <input
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Tulis komentar..."
-                    maxLength={200}
-                    className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-white/40"
-                  />
-                  <button
-                    type="submit"
-                    className="shrink-0 rounded-full bg-white/15 px-3 py-2 text-white hover:bg-white/25"
-                    aria-label="Kirim komentar"
-                  >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="m22 2-7 20-4-9-9-4Z" />
-                      <path d="M22 2 11 13" />
-                    </svg>
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={openCommentSheet}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-left text-sm text-white/60 backdrop-blur-sm"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+                  </svg>
+                  <span className="truncate">Komentar sebagai {visitorName}...</span>
+                </button>
                 <button
                   onClick={() => likeStory(activeStory.id)}
                   className="flex shrink-0 flex-col items-center text-white"
@@ -1265,6 +1372,75 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 </button>
               </div>
             </div>
+
+            {/* BOTTOM SHEET komentar: daftar + balas; story auto-pause */}
+            {commentOpen && (
+              <div
+                className="absolute inset-0 z-40"
+                onClick={closeCommentSheet}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="absolute inset-0 bg-black/45" />
+                <div
+                  className="animate-sheet-up absolute bottom-0 left-0 right-0 flex max-h-[75%] flex-col overflow-hidden rounded-t-3xl border-t border-white/10 bg-[#13131b] p-4 pb-5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-white/20" />
+                  <div className="mb-3 flex shrink-0 items-center justify-between">
+                    <p className="text-sm font-semibold text-white">
+                      Komentar ({activeStory.comments?.length || 0})
+                    </p>
+                    <button
+                      onClick={closeCommentSheet}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/70 hover:text-white"
+                      aria-label="Tutup komentar"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                    {(activeStory.comments || []).length === 0 ? (
+                      <p className="py-6 text-center text-xs text-white/40">
+                        Belum ada komentar. Mulai percakapan!
+                      </p>
+                    ) : (
+                      (activeStory.comments || [])
+                        .slice()
+                        .reverse()
+                        .map((c) => (
+                          <div key={c.id} className="rounded-xl bg-white/5 px-3 py-2">
+                            <p className="text-xs font-semibold text-white/70">{c.name}</p>
+                            <p className="mt-0.5 text-sm text-white/90">{c.text}</p>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  <form onSubmit={sendComment} className="mt-3 flex shrink-0 items-center gap-2">
+                    <input
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder={`Komentar sebagai ${visitorName}...`}
+                      maxLength={200}
+                      autoFocus
+                      className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm text-white placeholder-white/40 outline-none focus:border-white/40"
+                    />
+                    <button
+                      type="submit"
+                      className="shrink-0 rounded-full bg-violet-600 px-4 py-2.5 text-white hover:bg-violet-500"
+                      aria-label="Kirim komentar"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="m22 2-7 20-4-9-9-4Z" />
+                        <path d="M22 2 11 13" />
+                      </svg>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

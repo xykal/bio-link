@@ -143,6 +143,43 @@ body {
   }
 }
 
+/* Ring story: muter 1 kali pas muncul lalu diam */
+@keyframes ring-once {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ring-once {
+  transform-origin: center;
+  animation: ring-once 1.1s cubic-bezier(0.3, 0.7, 0.3, 1) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-once {
+    animation: none;
+  }
+}
+
+/* Bottom sheet komentar: naik dari bawah */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.animate-sheet-up {
+  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-up {
+    animation: none;
+  }
+}
+
 /* scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
