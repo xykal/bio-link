@@ -37,6 +37,8 @@ export const ICON_KEYS = [
   "play",
   "message",
   "sliders",
+  "menu",
+  "close",
 ] as const;
 
 export type IconKey = (typeof ICON_KEYS)[number];
@@ -204,6 +206,12 @@ const strokes: Record<string, React.ReactNode> = {
       <circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" strokeWidth="2" />
       <circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" strokeWidth="2" />
     </>
+  ),
+  menu: (
+    <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  ),
+  close: (
+    <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   ),
 };
 

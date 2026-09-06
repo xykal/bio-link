@@ -128,6 +128,14 @@ const NAV: { key: NavKey; label: string; icon: string }[] = [
   { key: "stats", label: "Statistik", icon: "chart" },
 ];
 
+// Menu aktif dibaca dari URL hash (/admin#link) supaya REFRESH dan share link
+// tetap berada di bagian yang sama, bukan balik ke halaman pertama.
+function viewFromHash(): NavKey | null {
+  if (typeof window === "undefined") return null;
+  const h = window.location.hash.replace(/^#/, "");
+  return NAV.find((n) => n.key === h)?.key ?? null;
+}
+
 const STORY_BGS = [
   "linear-gradient(135deg,#8b5cf6,#ec4899)",
   "linear-gradient(135deg,#0ea5e9,#22d3ee)",
@@ -227,7 +235,8 @@ export default function AdminPanel() {
   const recChunksRef = useRef<BlobPart[]>([]);
   const recTimerRef = useRef<number | null>(null);
   const recStartRef = useRef(0);
-  const [view, setView] = useState<NavKey>("profil");
+  const [view, setView] = useState<NavKey>(() => viewFromHash() ?? "profil");
+  const [navOpen, setNavOpen] = useState(false);
   const [stats, setStats] = useState<StatsResp | null>(null);
   const [team, setTeam] = useState<Member[]>([]);
   const [linkShape, setLinkShape] = useState<LinkShape>("rounded");
@@ -255,6 +264,42 @@ export default function AdminPanel() {
       .then((d) => setAuthed(d.authenticated))
       .catch(() => setAuthed(false));
   }, []);
+
+  // Pindah menu -> tulis hash (replaceState, biar history ga numpuk) + tutup drawer.
+  const go = useCallback((key: NavKey) => {
+    setView(key);
+    setNavOpen(false);
+    try {
+      window.history.replaceState(null, "", `#${key}`);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Hash berubah (back/forward atau edit manual URL) -> ikuti.
+  useEffect(() => {
+    const onHash = () => {
+      const k = viewFromHash();
+      if (k) setView(k);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // Drawer mobile: Escape buat nutup + kunci scroll body saat terbuka.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [navOpen]);
 
   async function loadData() {
     try {
@@ -894,14 +939,24 @@ export default function AdminPanel() {
   return (
     <main className="min-h-screen bg-[#0a0a0f]">
       <header className="sticky top-0 z-10 border-b border-white/5 bg-black/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-2 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              onClick={() => setNavOpen(true)}
+              aria-label="Buka menu"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition hover:text-white md:hidden"
+            >
+              <Icon name="menu" className="h-5 w-5" />
+            </button>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
               <Icon name="link" className="h-4 w-4" />
             </div>
-            <span className="font-semibold text-white">Bio Link Admin</span>
+            <span className="truncate font-semibold text-white">Bio Link Admin</span>
+            <span className="hidden truncate text-sm text-white/40 sm:inline md:hidden">
+              / {NAV.find((n) => n.key === view)?.label}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <a
               href="/"
               target="_blank"
@@ -919,6 +974,54 @@ export default function AdminPanel() {
         </div>
       </header>
 
+      {/* DRAWER NAV (mobile) — hamburger di header yang membukanya */}
+      {navOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Menu admin">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setNavOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-[#0d0d14] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
+                  <Icon name="link" className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-sm font-semibold text-white">Menu Admin</span>
+              </div>
+              <button
+                onClick={() => setNavOpen(false)}
+                aria-label="Tutup menu"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/60 transition hover:text-white"
+              >
+                <Icon name="close" className="h-4 w-4" />
+              </button>
+            </div>
+            <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+              {NAV.map((n) => (
+                <button
+                  key={n.key}
+                  type="button"
+                  onClick={() => go(n.key)}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                    view === n.key
+                      ? "bg-gradient-to-r from-violet-500/25 to-fuchsia-500/25 text-white"
+                      : "text-white/55 hover:bg-white/5 hover:text-white/80"
+                  }`}
+                >
+                  <Icon name={n.icon} className="h-4 w-4" />
+                  {n.label}
+                </button>
+              ))}
+            </nav>
+            <div className="border-t border-white/5 px-4 py-3 text-[11px] text-white/30">
+              Menu tersimpan di URL — refresh tetap di bagian ini.
+            </div>
+          </div>
+        </div>
+      )}
+
       {notice && (
         <div
           className={`fixed bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-sm backdrop-blur ${
@@ -933,14 +1036,15 @@ export default function AdminPanel() {
       )}
 
       <div className="mx-auto flex max-w-6xl gap-6 px-4 py-8">
-        {/* SIDEBAR */}
+        {/* SIDEBAR (desktop) */}
         <aside className="sticky top-20 hidden h-fit w-56 shrink-0 md:block">
           <nav className="space-y-1 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
             {NAV.map((n) => (
               <button
                 key={n.key}
                 type="button"
-                onClick={() => setView(n.key)}
+                onClick={() => go(n.key)}
+                aria-current={view === n.key ? "page" : undefined}
                 className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition ${
                   view === n.key
                     ? "bg-gradient-to-r from-violet-500/25 to-fuchsia-500/25 text-white"
@@ -955,25 +1059,6 @@ export default function AdminPanel() {
         </aside>
 
         <div className="min-w-0 flex-1 space-y-6">
-          {/* nav mobile */}
-          <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
-            {NAV.map((n) => (
-              <button
-                key={n.key}
-                type="button"
-                onClick={() => setView(n.key)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
-                  view === n.key
-                    ? "border-violet-400/60 bg-violet-500/15 text-white"
-                    : "border-white/10 bg-white/5 text-white/55"
-                }`}
-              >
-                <Icon name={n.icon} className="h-3.5 w-3.5" />
-                {n.label}
-              </button>
-            ))}
-          </div>
-
           {view === "preview" && (
             <>
         {/* PREVIEW LIVE */}
