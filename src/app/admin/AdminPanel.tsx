@@ -1225,7 +1225,7 @@ export default function AdminPanel() {
           <div className="flex justify-center rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-5">
             <iframe
               key={previewKey}
-              src="/"
+              src={`/?_preview=${previewKey}`}
               title="Preview halaman bio"
               className="h-[80vh] max-h-[900px] min-h-[620px] w-full max-w-[460px] rounded-2xl border border-white/10"
             />
