@@ -63,6 +63,14 @@ npm install
 npm run dev
 ```
 
+Tes manual (butuh server jalan di port 3111 + browser Playwright sekali install):
+
+```bash
+npm run build && npx next start -p 3111
+npx playwright install chromium   # sekali saja
+npm test                          # tes r15: leak audio story + progres voice note
+```
+
 ### Environment variables
 | Var | Keterangan |
 |---|---|

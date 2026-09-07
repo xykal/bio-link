@@ -1,6 +1,10 @@
 import { chromium } from "playwright";
 
-const base = "http://localhost:3111";
+// Tes manual revisi 15: leak audio antar-story + progres voice note.
+// Jalankan: (1) npm run build && npx next start -p 3111
+//           (2) BASE_URL=http://localhost:3111 npm test
+// Butuh browser Playwright sekali: npx playwright install chromium
+const base = process.env.BASE_URL || "http://localhost:3111";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const errs = [];
