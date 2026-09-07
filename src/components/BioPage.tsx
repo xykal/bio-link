@@ -924,10 +924,14 @@ export default function BioPage({
             {profile?.banner ? (
               <div className="w-full overflow-hidden rounded-3xl border border-black/5 shadow-2xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* Banner = elemen LCP: wajib eager + prioritas tinggi.
+                    Dulu loading="lazy" -> gambar terakhir diketahui browser,
+                    LCP bengkak sampai 5+ detik di koneksi lambat. */}
                 <img
                   src={optImg(profile.banner, { w: 900, h: 300, crop: "fill" })}
                   alt=""
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                   decoding="async"
                   className="h-28 w-full object-cover"
                 />

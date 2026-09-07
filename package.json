@@ -25,5 +25,13 @@
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "browserslist": [
+    ">0.3%",
+    "last 2 versions",
+    "firefox esr",
+    "not dead",
+    "not op_mini all",
+    "not IE 11"
+  ]
 }

@@ -14,6 +14,13 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
       },
+      {
+        // Aset publik statis (favicon, OG banner) tidak di-hash namanya, jadi
+        // jangan immutable — cukup seminggu, cukup lama buat visitor balik
+        // arun tanpa unduh ulang, cukup singkat buat update terasa.
+        source: "/(favicon.png|favicon.ico|icon.png|og-default.jpg|og-default.png|apple-touch-icon.png)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
+      },
     ];
   },
 };

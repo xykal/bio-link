@@ -36,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
     : [{ url: "/favicon.png", type: "image/png" }];
   const ogImages = seo?.ogImage
     ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }]
-    : [{ url: "https://bio.haekal.web.id/og-default.png", width: 1200, height: 630, alt: title }];
+    : [{ url: "https://bio.haekal.web.id/og-default.jpg", width: 1200, height: 630, alt: title }];
 
   return {
     title,
