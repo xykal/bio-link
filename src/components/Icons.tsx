@@ -39,6 +39,7 @@ export const ICON_KEYS = [
   "sliders",
   "menu",
   "close",
+  "wrench",
 ] as const;
 
 export type IconKey = (typeof ICON_KEYS)[number];
@@ -212,6 +213,9 @@ const strokes: Record<string, React.ReactNode> = {
   ),
   close: (
     <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  ),
+  wrench: (
+    <path d="M14.7 6.3a4.5 4.5 0 0 0-6 5.6L3 17.6V21h3.4l5.7-5.7a4.5 4.5 0 0 0 5.6-6L14.6 12l-2.6-2.6 2.7-3.1z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
   ),
 };
 

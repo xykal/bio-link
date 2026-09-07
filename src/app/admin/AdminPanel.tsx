@@ -114,6 +114,7 @@ type NavKey =
   | "bubble"
   | "tampilan"
   | "data"
+  | "perawatan"
   | "stats";
 
 const NAV: { key: NavKey; label: string; icon: string }[] = [
@@ -125,6 +126,7 @@ const NAV: { key: NavKey; label: string; icon: string }[] = [
   { key: "bubble", label: "Gelembung", icon: "message" },
   { key: "tampilan", label: "Tampilan & SEO", icon: "image" },
   { key: "data", label: "Data", icon: "database" },
+  { key: "perawatan", label: "Perawatan", icon: "wrench" },
   { key: "stats", label: "Statistik", icon: "chart" },
 ];
 
@@ -135,6 +137,67 @@ function viewFromHash(): NavKey | null {
   const h = window.location.hash.replace(/^#/, "");
   return NAV.find((n) => n.key === h)?.key ?? null;
 }
+
+// Bentuk respons /api/admin/maintenance (lihat lib/maintenance.ts).
+type MaintDiag = {
+  time: string;
+  storage: { mode: string; d1: { ok: boolean; ms: number; error?: string } };
+  store: {
+    links: number;
+    stories: number;
+    storiesExpiringSoon: number;
+    stack: number;
+    team: number;
+    comments: number;
+    approxKB: number;
+  };
+  analytics: {
+    visits: number;
+    visitors: number;
+    totalVisits: number;
+    linkClicks: number;
+    approxKB: number;
+  };
+  cache: {
+    ttlMs: number;
+    hits: number;
+    misses: number;
+    flushes: number;
+    cached: boolean;
+    lastSetAt: number | null;
+    lastFlushAt: number | null;
+  };
+  server: {
+    node: string;
+    platform: string;
+    uptimeSec: number;
+    rssMB: number;
+    heapMB: number;
+    pid: number;
+    time: string;
+  };
+  env: {
+    cloudinary: boolean;
+    sessionSecret: boolean;
+    cronSecret: boolean;
+    adminPasswordDefault: boolean;
+  };
+  maintenance: {
+    autoEnabled: boolean;
+    retentionDays: number;
+    log: {
+      at: number;
+      trigger: string;
+      ok: boolean;
+      summary: string;
+      storiesPruned: number;
+      visitsPruned: number;
+      visitorsPruned: number;
+      cacheFlushed: boolean;
+      error?: string;
+    }[];
+  };
+};
 
 const STORY_BGS = [
   "linear-gradient(135deg,#8b5cf6,#ec4899)",
@@ -258,6 +321,13 @@ export default function AdminPanel() {
   const [previewKey, setPreviewKey] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
 
+  // ===== Perawatan (cache, rawat server, perawatan berkala otomatis) =====
+  const [maint, setMaint] = useState<MaintDiag | null>(null);
+  const [maintBusy, setMaintBusy] = useState<string | null>(null);
+  const [maintRefresh, setMaintRefresh] = useState(0);
+  const [maintAuto, setMaintAuto] = useState(true);
+  const [maintRetention, setMaintRetention] = useState(30);
+
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
@@ -300,6 +370,84 @@ export default function AdminPanel() {
       document.body.style.overflow = prev;
     };
   }, [navOpen]);
+
+  // ===== Perawatan: ambil diagnostik tiap menu dibuka / setelah aksi =====
+  useEffect(() => {
+    if (view !== "perawatan" || !authed) return;
+    let alive = true;
+    fetch("/api/admin/maintenance")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: MaintDiag) => {
+        if (!alive) return;
+        setMaint(d);
+        setMaintAuto(d.maintenance.autoEnabled);
+        setMaintRetention(d.maintenance.retentionDays);
+      })
+      .catch(() => {
+        if (alive) setMaint(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [view, authed, maintRefresh]);
+
+  async function runMaintAction(action: string) {
+    setMaintBusy(action);
+    try {
+      const r = await fetch("/api/admin/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setNotice({ msg: d.message || d.error || "Selesai", ok: r.ok && d.ok !== false });
+      setMaintRefresh((k) => k + 1);
+    } catch {
+      setNotice({ msg: "Gagal menjalankan aksi perawatan", ok: false });
+    } finally {
+      setMaintBusy(null);
+    }
+  }
+
+  async function saveMaintSettings(next: { autoEnabled?: boolean; retentionDays?: number }) {
+    const autoEnabled = next.autoEnabled ?? maintAuto;
+    const retentionDays = next.retentionDays ?? maintRetention;
+    setMaintBusy("save-settings");
+    try {
+      const r = await fetch("/api/admin/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save-settings", autoEnabled, retentionDays }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setNotice({ msg: d.message || d.error || "Tersimpan", ok: r.ok });
+      setMaintRefresh((k) => k + 1);
+    } catch {
+      setNotice({ msg: "Gagal menyimpan pengaturan perawatan", ok: false });
+    } finally {
+      setMaintBusy(null);
+    }
+  }
+
+  // Cache browser perangkat admin ini: identitas visitor (bio_*) + cookie-nya.
+  function clearBrowserCache() {
+    if (typeof window === "undefined") return;
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("bio_"))
+        .forEach((k) => localStorage.removeItem(k));
+      document.cookie.split(";").forEach((c) => {
+        const name = c.split("=")[0].trim();
+        if (name.startsWith("bio_")) {
+          document.cookie = `${name}=; path=/; max-age=0`;
+        }
+      });
+    } catch {
+      /* private mode dsb. */
+    }
+    setNotice({ msg: "Cache browser dibersihkan — memuat ulang…", ok: true });
+    setTimeout(() => window.location.reload(), 700);
+  }
 
   async function loadData() {
     try {
@@ -2266,6 +2414,239 @@ export default function AdminPanel() {
         </Section>
             </>
           )}
+
+          {view === "perawatan" && (
+            <>
+        <Section
+          title="Status Server"
+          sub="Denyut jantung hosting: database, penyimpanan, cache, dan runtime"
+          right={
+            <button
+              type="button"
+              onClick={() => setMaintRefresh((k) => k + 1)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+            >
+              <Icon name="refresh" className="h-3.5 w-3.5" /> Muat ulang
+            </button>
+          }
+        >
+          {!maint ? (
+            <p className="text-sm text-white/40">Memuat diagnostik…</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <MaintStat
+                ok={maint.storage.d1.ok}
+                label="Database (D1)"
+                value={maint.storage.d1.ok ? `${maint.storage.d1.ms} ms` : "Gangguan"}
+                sub={maint.storage.mode}
+              />
+              <MaintStat
+                ok
+                label="Penyimpanan store"
+                value={`${maint.store.approxKB} KB`}
+                sub={`${maint.store.links} link · ${maint.store.stories} story · ${maint.store.comments} komentar`}
+              />
+              <MaintStat
+                ok
+                label="Analytics"
+                value={`${maint.analytics.approxKB} KB`}
+                sub={`${maint.analytics.totalVisits} kunjungan total · ${maint.analytics.visitors} visitor tersimpan`}
+              />
+              <MaintStat
+                ok={maint.cache.cached || maint.cache.hits > 0}
+                label="Cache server"
+                value={maint.cache.cached ? "Aktif" : "Kosong"}
+                sub={`${maint.cache.hits} hit / ${maint.cache.misses} miss · TTL ${Math.round(maint.cache.ttlMs / 1000)}s`}
+              />
+              <MaintStat
+                ok
+                label="Runtime"
+                value={`Node ${maint.server.node.replace(/^v/, "")}`}
+                sub={`${maint.server.platform} · uptime ${Math.round(maint.server.uptimeSec / 60)} mnt · RAM ${maint.server.rssMB} MB`}
+              />
+              <MaintStat
+                ok={maint.env.sessionSecret}
+                label="Session secret"
+                value={maint.env.sessionSecret ? "Terpasang" : "Default turunan PIN"}
+                sub="Tanda tangan cookie admin"
+              />
+              <MaintStat
+                ok={!maint.env.adminPasswordDefault}
+                label="PIN admin"
+                value={maint.env.adminPasswordDefault ? "Masih default (0099)" : "Sudah diganti"}
+                sub="Ganti lewat env ADMIN_PASSWORD"
+              />
+              <MaintStat
+                ok
+                label="Upload media"
+                value={maint.env.cloudinary ? "Cloudinary siap" : "Tidak dikonfigurasi"}
+                sub="Avatar, banner, story"
+              />
+            </div>
+          )}
+          {maint && !maint.storage.d1.ok && maint.storage.d1.error && (
+            <p className="mt-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+              D1 bermasalah: {maint.storage.d1.error}
+            </p>
+          )}
+        </Section>
+
+        <Section title="Bersihkan Cache" sub="Cache server mempercepat halaman publik; cache browser menyimpan identitas pengunjung">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => runMaintAction("flush-cache")}
+              disabled={maintBusy === "flush-cache"}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white disabled:opacity-50"
+            >
+              {maintBusy === "flush-cache" ? "Membersihkan…" : "Bersihkan cache server"}
+            </button>
+            <button
+              type="button"
+              onClick={clearBrowserCache}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white"
+            >
+              Bersihkan cache browser (perangkat ini)
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-white/35">
+            Cache server menyimpan salinan data D1 selama {maint ? Math.round(maint.cache.ttlMs / 1000) : 10} detik supaya
+            pengunjung tidak memukul database di setiap kunjungan — perubahan dari panel tetap langsung tampil karena
+            penyimpanan selalu membuang cache. Di serverless cache hidup per-instance, jadi tombol ini mengosongkan
+            instance yang melayani request; sisanya kedaluwarsa sendiri maksimal TTL.
+            Cache browser berisi identitas anonim (nama &amp; tanda like/viewed) — dibersihkan hanya di perangkat ini.
+          </p>
+        </Section>
+
+        <Section title="Rawat Server" sub="Pembersihan manual: story kadaluwarsa, data analytics lama, dan perawatan penuh">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => runMaintAction("prune-stories")}
+              disabled={maintBusy === "prune-stories"}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white disabled:opacity-50"
+            >
+              {maintBusy === "prune-stories" ? "Membersihkan…" : "Hapus story kadaluwarsa"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runMaintAction("prune-analytics")}
+              disabled={maintBusy === "prune-analytics"}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white disabled:opacity-50"
+            >
+              {maintBusy === "prune-analytics" ? "Membersihkan…" : `Bersihkan analytics lama (${maintRetention} hari)`}
+            </button>
+            <button
+              type="button"
+              onClick={() => runMaintAction("housekeeping")}
+              disabled={maintBusy === "housekeeping"}
+              className="rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {maintBusy === "housekeeping" ? "Merawat…" : "Rawat penuh sekarang"}
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-white/35">
+            Story otomatis lenyap 24 jam setelah dibuat — pembersihan ini menjamin media Cloudinary-nya ikut terhapus
+            walau halaman sepi. Analytics lama (daftar kunjungan &amp; visitor) dibersihkan sesuai retensi; grafik
+            agregat (total, per-hari, referrer, device) tidak berubah. Semua aksi aman dijalankan berulang.
+          </p>
+        </Section>
+
+        <Section title="Perawatan Berkala Otomatis" sub="Vercel Cron menjalankan perawatan penuh setiap hari 03:15 WIB (20:15 UTC)">
+          <div className="flex flex-wrap items-end gap-5">
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={maintAuto}
+                onChange={(e) => {
+                  setMaintAuto(e.target.checked);
+                  saveMaintSettings({ autoEnabled: e.target.checked });
+                }}
+                className="h-5 w-5 accent-violet-500"
+              />
+              <span className="text-sm font-medium text-white/80">
+                Perawatan otomatis {maintAuto ? "aktif" : "dimatikan sementara"}
+              </span>
+            </label>
+            <div>
+              <label className="text-xs font-medium uppercase tracking-wider text-white/40">Retensi analytics (hari)</label>
+              <input
+                type="number"
+                min={7}
+                max={365}
+                value={maintRetention}
+                onChange={(e) => setMaintRetention(Number(e.target.value) || 30)}
+                className="mt-1.5 w-28 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-violet-400/60"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => saveMaintSettings({})}
+              disabled={maintBusy === "save-settings"}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold text-white/80 transition hover:text-white disabled:opacity-50"
+            >
+              {maintBusy === "save-settings" ? "Menyimpan…" : "Simpan retensi"}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-2 text-xs text-white/40 sm:grid-cols-2">
+            <p>
+              Cron secret:{" "}
+              {maint?.env.cronSecret ? (
+                <span className="text-emerald-300">terpasang — endpoint cron terkunci kunci</span>
+              ) : (
+                <span className="text-amber-300">
+                  belum diisi — endpoint tetap aman (rate-limit + hanya membersihkan data kedaluwarsa), tambah
+                  CRON_SECRET di env untuk menguncinya
+                </span>
+              )}
+            </p>
+            <p>
+              Perawatan otomatis terakhir:{" "}
+              {maint && maint.maintenance.log.filter((l) => l.trigger === "cron").length ? (
+                <span className="text-white/70">
+                  {new Date(
+                    maint.maintenance.log.filter((l) => l.trigger === "cron").slice(-1)[0].at
+                  ).toLocaleString("id-ID")}
+                </span>
+              ) : (
+                "belum pernah jalan (menunggu jadwal pertama)"
+              )}
+            </p>
+          </div>
+        </Section>
+
+        <Section title="Riwayat Perawatan" sub="30 catatan terakhir, manual maupun otomatis">
+          {!maint || maint.maintenance.log.length === 0 ? (
+            <p className="text-sm text-white/40">Belum ada riwayat. Jalankan perawatan penuh di atas untuk mulai mencatat.</p>
+          ) : (
+            <div className="space-y-2">
+              {[...maint.maintenance.log].reverse().map((l, i) => (
+                <div
+                  key={`${l.at}-${i}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm"
+                >
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      l.trigger === "cron"
+                        ? "bg-sky-500/15 text-sky-300"
+                        : "bg-violet-500/15 text-violet-300"
+                    }`}
+                  >
+                    {l.trigger === "cron" ? "otomatis" : "manual"}
+                  </span>
+                  <span className="text-xs text-white/35">
+                    {new Date(l.at).toLocaleString("id-ID")}
+                  </span>
+                  <span className={l.ok ? "text-white/70" : "text-rose-300"}>
+                    {l.ok ? l.summary : `Gagal: ${l.error || l.summary}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+            </>
+          )}
         </div>
       </div>
     </main>
@@ -2562,6 +2943,22 @@ function Section({ title, sub, right, children }: {
       </div>
       {children}
     </section>
+  );
+}
+
+/* Kartu status kecil buat menu Perawatan. */
+function MaintStat({ ok, label, value, sub }: {
+  ok: boolean; label: string; value: string; sub?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-emerald-400" : "bg-rose-400"}`} />
+        <span className="truncate text-xs font-medium uppercase tracking-wider text-white/40">{label}</span>
+      </div>
+      <p className="mt-1.5 text-sm font-semibold text-white">{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] leading-relaxed text-white/35">{sub}</p>}
+    </div>
   );
 }
 

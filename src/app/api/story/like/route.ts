@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { readStore, writeStore } from "@/lib/data";
 import { visitorLike, sanitizeVisitorId } from "@/lib/analytics";
+import { rateLimit, clientKey } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
 // Publik: like sebuah story. Per visitor anonim hanya bisa like 1 kali
-// (dicek di DB), jadi walau refresh tidak nambah lagi.
+// (dicek di DB), jadi walau refresh tidak nambah lagi. Rate limit 15/10 menit
+// untuk melindungi store dari spam bot.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
+  const rl = rateLimit(`like:${clientKey(req, sanitizeVisitorId(body.visitorId))}`, 15, 10 * 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Terlalu sering, coba lagi nanti" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
   const storyId = String(body.storyId || "");
   const visitorId = sanitizeVisitorId(body.visitorId);
   if (!storyId) return NextResponse.json({ error: "storyId kosong" }, { status: 400 });

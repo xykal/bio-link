@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto, { randomUUID } from "crypto";
 import { getTechIcon } from "./stackIcons";
+import { cacheGet, cacheSet, cacheInvalidate } from "./storecache";
 
 export type LinkItem = {
   id: string;
@@ -123,6 +124,14 @@ async function destroyCloudinary(publicId: string, resourceType: string): Promis
   }
 }
 
+// Hapus media Cloudinary dari kumpulan story (dipakai perawatan manual/cron).
+export async function destroyStoryMedia(stories: Story[]): Promise<void> {
+  const destroys = stories
+    .filter((s) => s.mediaPublicId && s.mediaResourceType)
+    .map((s) => destroyCloudinary(s.mediaPublicId as string, s.mediaResourceType as string));
+  if (destroys.length) await Promise.allSettled(destroys);
+}
+
 // Tata letak daftar link di halaman publik
 export type LinkLayout = "list" | "grid" | "compact";
 
@@ -224,6 +233,27 @@ export type Sections = {
   team: boolean;
 };
 
+// ===== Perawatan server (menu "Perawatan" di panel admin) =====
+// Log + konfigurasi perawatan berkala; cron Vercel memanggil /api/cron/maintenance.
+export type MaintenanceTrigger = "manual" | "cron";
+
+export type MaintenanceLogEntry = {
+  at: number;
+  trigger: MaintenanceTrigger;
+  ok: boolean;
+  summary: string;
+  storiesPruned: number;
+  visitsPruned: number;
+  visitorsPruned: number;
+  cacheFlushed: boolean;
+  error?: string;
+};
+
+export type MaintenanceConfig = {
+  autoEnabled: boolean; // cron jalan / dihentikan sementara
+  retentionDays: number; // retensi data analytics (visits & visitors lama)
+};
+
 export type Store = {
   profile: Profile;
   links: LinkItem[];
@@ -240,6 +270,7 @@ export type Store = {
   bubble: Bubble;
   sections: Sections;
   branding: Branding;
+  maintenance: MaintenanceConfig & { log: MaintenanceLogEntry[] };
 };
 
 // ---------------------------------------------------------------------------
@@ -372,6 +403,7 @@ const DEFAULT_STORE: Store = {
   stories: [],
   sections: { stack: true, team: true },
   branding: { enabled: true, text: "Made by XySpace Tch" },
+  maintenance: { autoEnabled: true, retentionDays: 30, log: [] },
 };
 
 export function normalize(parsed: Partial<Store>): Store {
@@ -518,6 +550,45 @@ export function normalize(parsed: Partial<Store>): Store {
       team: parsed.sections?.team !== false,
     },
     branding: { ...d.branding, ...(parsed.branding || {}) },
+    maintenance: {
+      autoEnabled: parsed.maintenance?.autoEnabled !== false,
+      retentionDays:
+        typeof parsed.maintenance?.retentionDays === "number" &&
+        parsed.maintenance.retentionDays >= 7 &&
+        parsed.maintenance.retentionDays <= 365
+          ? Math.round(parsed.maintenance.retentionDays)
+          : 30,
+      log: Array.isArray(parsed.maintenance?.log)
+        ? parsed.maintenance!.log
+            .filter(
+              (e) =>
+                e &&
+                typeof e.at === "number" &&
+                (e.trigger === "manual" || e.trigger === "cron")
+            )
+            .slice(-30)
+            .map((e) => ({
+              at: e.at,
+              trigger: e.trigger as MaintenanceTrigger,
+              ok: e.ok !== false,
+              summary: typeof e.summary === "string" ? e.summary.slice(0, 300) : "",
+              storiesPruned:
+                typeof e.storiesPruned === "number" && e.storiesPruned >= 0
+                  ? Math.floor(e.storiesPruned)
+                  : 0,
+              visitsPruned:
+                typeof e.visitsPruned === "number" && e.visitsPruned >= 0
+                  ? Math.floor(e.visitsPruned)
+                  : 0,
+              visitorsPruned:
+                typeof e.visitorsPruned === "number" && e.visitorsPruned >= 0
+                  ? Math.floor(e.visitorsPruned)
+                  : 0,
+              cacheFlushed: e.cacheFlushed === true,
+              error: typeof e.error === "string" ? e.error.slice(0, 200) : undefined,
+            }))
+        : [],
+    },
   };
 }
 
@@ -612,6 +683,10 @@ function pruneExpiredStories(store: Store): {
 }
 
 export async function readStore(): Promise<Store> {
+  // Micro-cache: hemat pemanggilan REST API D1 (lihat lib/storecache.ts).
+  const hit = cacheGet();
+  if (hit) return hit;
+
   const raw = useD1 ? await d1Read() : await fileRead();
   const { store, changed, expired } = pruneExpiredStories(raw);
   if (changed) {
@@ -624,14 +699,16 @@ export async function readStore(): Promise<Store> {
     }
     // Hapus media story kedaluwarsa dari Cloudinary (best-effort, di-await agar
     // tuntas sebelum function selesai di serverless).
-    const destroys = expired
-      .filter((s) => s.mediaPublicId && s.mediaResourceType)
-      .map((s) => destroyCloudinary(s.mediaPublicId as string, s.mediaResourceType as string));
-    if (destroys.length) await Promise.allSettled(destroys);
+    await destroyStoryMedia(expired);
   }
+  cacheSet(store);
   return store;
 }
 export async function writeStore(store: Store): Promise<void> {
-  return useD1 ? d1Write(store) : fileWrite(store);
+  // Buang cache sebelum menulis supaya data basi tidak pernah terbaca.
+  cacheInvalidate();
+  const res = useD1 ? await d1Write(store) : await fileWrite(store);
+  cacheSet(store);
+  return res;
 }
-export { useD1, STORY_TTL_MS as STORY_TTL };
+export { useD1, STORY_TTL_MS as STORY_TTL, pruneExpiredStories };

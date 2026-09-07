@@ -194,6 +194,41 @@ export async function getAnalytics(): Promise<AnalyticsData> {
   return read();
 }
 
+// ---- Perawatan: bersihkan data lama (menu Perawatan / cron harian) ----
+// visits & visitors lebih tua dari retensi dibuang; agregat historis
+// (total, byDay, refs, devices, klik) tetap utuh jadi grafik tidak berubah.
+export async function pruneAnalytics(
+  retentionDays: number
+): Promise<{ visitsPruned: number; visitorsPruned: number }> {
+  const days =
+    typeof retentionDays === "number" && retentionDays >= 1 && retentionDays <= 365
+      ? Math.floor(retentionDays)
+      : 30;
+  const cutoff = Date.now() - days * 86400000;
+  const data = await read();
+  const visits = data.visits.filter((v) => (v.at || 0) >= cutoff);
+  const visitors: Record<string, VisitorRec> = {};
+  let visitorsPruned = 0;
+  for (const [id, rec] of Object.entries(data.visitors)) {
+    if ((rec.at || 0) >= cutoff) visitors[id] = rec;
+    else visitorsPruned++;
+  }
+  const visitsPruned = data.visits.length - visits.length;
+  if (visitsPruned === 0 && visitorsPruned === 0) return { visitsPruned: 0, visitorsPruned: 0 };
+  await write({ ...data, visits, visitors });
+  return { visitsPruned, visitorsPruned };
+}
+
+export function analyticsSize(data: AnalyticsData) {
+  return {
+    visits: data.visits.length,
+    visitors: Object.keys(data.visitors).length,
+    totalVisits: data.total,
+    linkClicks: Object.keys(data.linkClicks).length,
+    approxKB: Math.round(JSON.stringify(data).length / 1024),
+  };
+}
+
 export function serverInfo() {
   const mem = process.memoryUsage();
   return {

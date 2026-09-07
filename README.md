@@ -21,12 +21,14 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 
 **Panel Admin (`/admin`)**
 - Login **PIN angka (keypad)** — password default `0099`
+- Menu **persisten di URL** (`/admin#link`, `/admin#story`, …) — refresh/back tidak balik ke awal; mobile pakai **drawer hamburger**, desktop pakai **sidebar**
 - Kelola profil: nama, handle, bio, **avatar upload (tanpa URL)**, banner, warna aksen
 - Kelola semua **sosial media**
 - Kelola **link** (CRUD + reorder + toggle + tipe + gate)
 - Atur **SEO / OpenGraph**: judul, deskripsi, **favicon upload**, **OG banner upload**, URL rules
 - Atur **gaya font** masing-masing teks
 - Atur **theme** (Dark/Light) & **branding** footer
+- Menu **Perawatan**: status server (ping D1, ukuran store, cache, runtime), **bersihkan cache** server/browser, rawat server (hapus story kadaluwarsa + analytics lama), dan **perawatan berkala otomatis** via Vercel Cron (03:15 WIB)
 
 ## 🔐 Login Admin
 - Buka `https://domain-mu/admin`
@@ -36,8 +38,23 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 ## 🔒 Keamanan sesi admin
 - Cookie sesi **ditandatangani HMAC** (`SESSION_SECRET`) + masa berlaku 7 hari — tidak bisa dipalsukan hanya dengan tahu nama cookie.
 - Perbandingan PIN **constant-time**, login di-rate-limit (10 percobaan / 10 menit / IP).
+- API story publik **di-rate-limit** (komentar 5/10 mnt, like 15/10 mnt, view 60/10 mnt per IP+visitor).
 - `/api/upload` wajib sesi admin, folder Cloudinary di-whitelist, gambar maks 4 MB.
 - Gate grup/saluran memakai widget resmi `gate.js` dari `rules.xyc.my.id` (Shadow DOM, wajib scroll & setuju). Modal lokal hanya fallback bila widget gagal dimuat — tidak pakai iframe karena origin rules mengirim `X-Frame-Options: SAMEORIGIN`.
+
+## 🧰 Perawatan (menu baru di panel admin)
+
+Menu **Perawatan** (`/admin#perawatan`) merawat hosting/server tanpa buka dashboard Cloudflare/Vercel:
+
+| Blok | Isi |
+|---|---|
+| **Status Server** | Ping latency D1, ukuran store & analytics, kondisi cache, runtime Node, ceklist env (SESSION_SECRET, CRON_SECRET, PIN masih default?) |
+| **Bersihkan Cache** | Micro-cache server D1 (TTL 10 dtk, otomatis dibuang saat ada perubahan) + cache browser perangkat (identitas visitor `bio_*`) |
+| **Rawat Server** | Hapus story kadaluwarsa (media Cloudinary ikut di-destroy), bersihkan analytics lama sesuai retensi, atau **rawat penuh** sekali klik |
+| **Perawatan Berkala Otomatis** | Vercel Cron (`vercel.json`, 20:15 UTC = 03:15 WIB) menjalankan rawat penuh harian; bisa dimatikan sementara & atur retensi (7–365 hari) dari panel |
+| **Riwayat Perawatan** | 30 catatan terakhir (manual/otomatis) beserta hasilnya |
+
+Endpoint cron: `GET /api/cron/maintenance` — kalau env `CRON_SECRET` diisi, wajib `Authorization: Bearer <secret>` atau `?key=<secret>`; kalau kosong tetap rate-limited (3/10 mnt) dan hanya membersihkan data yang memang kedaluwarsa.
 
 ## 📦 Setup
 
