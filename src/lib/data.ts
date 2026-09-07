@@ -709,6 +709,15 @@ export async function writeStore(store: Store): Promise<void> {
   cacheInvalidate();
   const res = useD1 ? await d1Write(store) : await fileWrite(store);
   cacheSet(store);
+  // Halaman "/" kini ISR (cache edge 2 menit) — invalidate segera supaya
+  // simpan admin langsung terlihat, tidak menunggu jendela revalidasi.
+  try {
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/");
+  } catch {
+    // Best-effort: kalau gagal (mis. dipanggil di konteks non-request),
+    // cache edge tetap kedaluwarsa maks 2 menit kemudian.
+  }
   return res;
 }
 export { useD1, STORY_TTL_MS as STORY_TTL, pruneExpiredStories };

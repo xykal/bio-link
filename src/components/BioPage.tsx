@@ -376,13 +376,7 @@ function ProfileBubble({
   );
 }
 
-export default function BioPage({
-  initial,
-  initialViewed,
-}: {
-  initial: Store | null;
-  initialViewed?: string[];
-}) {
+export default function BioPage({ initial }: { initial: Store | null }) {
   const [data, setData] = useState<PublicData | null>(() =>
     initial ? toPublic(initial) : null
   );
@@ -400,8 +394,8 @@ export default function BioPage({
   const [visitorId] = useState(getVisitorId);
   const [visitorName, setVisitorName] = useState(getVisitorName);
   const [viewedSet, setViewedSet] = useState<Record<string, boolean>>(() => ({
-    // Dari cookie (SSR) biar abu langsung tampil & tahan refresh, + localStorage.
-    ...Object.fromEntries((initialViewed || []).map((id) => [id, true])),
+    // Dari localStorage (client); server tidak lagi SSR-ing status dilihat
+    // karena HTML di-cache edge. /api/data me-merge sisanya saat init.
     ...readViewed(),
   }));
   const videoRef = useRef<HTMLVideoElement>(null);

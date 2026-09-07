@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
 import { cache } from "react";
 import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
 
-export const dynamic = "force-dynamic";
+// ISR 2 menit: HTML dilayani dari cache edge (Vercel POP terdekat), data
+// di-refresh di belakang layar. Compute Vercel Hobby ada di AS — tanpa ini
+// setiap pengunjung Indonesia menunggu PP Pasifik buat HTML yang isinya
+// sama. Setiap simpan admin memanggil revalidatePath("/") di writeStore,
+// jadi perubahan tetap instan; preview admin pakai cache-buster sendiri.
+export const revalidate = 120;
 
 // Satu baca D1 per request (React cache = dedupe utk metadata, viewport, Home).
 // Dibungkus try/catch supaya halaman TIDAK PERNAH 500 walau D1 sedang blip;
@@ -43,7 +47,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     icons,
     // Marker deploy: biar gampang ngecek build mana yang live di prod.
-    other: { "x-build": "r15-float-vn" },
+    other: { "x-build": "r16-perf-edge" },
     openGraph: {
       title,
       description,
@@ -58,15 +62,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function Home() {
   const initial = await getStore();
-  // Story yang udah dilihat visitor (dari cookie) -> render ring abu saat SSR.
-  let initialViewed: string[] = [];
-  try {
-    const store = await cookies();
-    const raw = store.get("bio_viewed")?.value || "";
-    const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-    if (Array.isArray(parsed)) initialViewed = parsed.filter((x) => typeof x === "string");
-  } catch {
-    initialViewed = [];
-  }
-  return <BioPage initial={initial} initialViewed={initialViewed} />;
+  // Ring story abu tidak lagi dibaca dari cookie saat SSR: halaman kini
+  // di-cache di edge (sama untuk semua orang). BioPage sudah mengambil
+  // status dilihat dari localStorage + /api/data sejak awal di client.
+  return <BioPage initial={initial} />;
 }
