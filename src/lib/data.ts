@@ -349,7 +349,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "GitHub",
-      url: "https://github.com/xykalnotkel",
+      url: "https://github.com/xykal",
       icon: "github",
       order: 4,
       enabled: true,
@@ -359,7 +359,7 @@ const DEFAULT_STORE: Store = {
     instagram: "https://instagram.com/haekal",
     tiktok: "https://tiktok.com/@haekal",
     youtube: "https://youtube.com/@haekal",
-    github: "https://github.com/xykalnotkel",
+    github: "https://github.com/xykal",
     x: "https://x.com",
     facebook: "",
     linkedin: "",
@@ -371,7 +371,7 @@ const DEFAULT_STORE: Store = {
   },
   stack: DEFAULT_STACK_SLUGS.map(makeStack).filter((x): x is StackItem => x !== null),
   team: [
-    { id: randomUUID(), name: "Haekal", role: "Founder", avatar: "", url: "https://github.com/xykalnotkel" },
+    { id: randomUUID(), name: "Haekal", role: "Founder", avatar: "", url: "https://github.com/xykal" },
     { id: randomUUID(), name: "XySpace", role: "Team", avatar: "", url: "" },
   ],
   fonts: {
