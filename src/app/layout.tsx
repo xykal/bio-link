@@ -27,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="id" className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="id" className={`${geistSans.variable} antialiased`}>
       <head>
         {/* Preconnect: mempercepat muat gambar (Cloudinary) & font (Google) */}
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
@@ -41,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         {fontsHref && <link rel="stylesheet" href={fontsHref} />}
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-dvh flex flex-col">
         {children}
       </body>
     </html>

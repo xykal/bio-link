@@ -57,6 +57,11 @@ try {
         width: innerWidth,
         documentWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth,
+        documentHeight: document.documentElement.scrollHeight,
+        viewportHeight: document.documentElement.clientHeight,
+        mainHeight: document.querySelector('.bio-page')?.getBoundingClientRect().height ?? null,
+        backgroundHeight: [...(document.querySelector('.bio-page')?.children || [])]
+          .find((child) => child.getAttribute("aria-hidden") === "true")?.getBoundingClientRect().height ?? null,
         contentTop: content?.getBoundingClientRect().top ?? null,
         headingTop: heading?.getBoundingClientRect().top ?? null,
         stackBounds: bounds ? { left: bounds.left, right: bounds.right } : null,
@@ -64,6 +69,9 @@ try {
       };
     });
     assert.ok(metrics.documentWidth <= metrics.clientWidth + 1, `public page overflow at ${viewport.width}px`);
+    assert.ok(metrics.documentHeight >= metrics.viewportHeight, `public page should retain vertical scrolling at ${viewport.width}px`);
+    assert.ok(metrics.mainHeight !== null && Math.abs(metrics.documentHeight - metrics.mainHeight) <= 1, `main should grow with page content at ${viewport.width}px`);
+    assert.ok(metrics.backgroundHeight !== null && Math.abs(metrics.backgroundHeight - metrics.mainHeight) <= 1, `background should cover the full page at ${viewport.width}px`);
     assert.ok(metrics.contentTop !== null && metrics.contentTop >= 0, `public content must not be cropped above the viewport at ${viewport.width}px`);
     assert.ok(metrics.headingTop !== null && metrics.headingTop >= 0, `profile heading must remain visible below the top edge at ${viewport.width}px`);
     assert.ok(metrics.stackBounds, "tech stack should be present");

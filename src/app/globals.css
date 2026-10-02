@@ -12,9 +12,8 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-html,
-body {
-  height: 100%;
+html {
+  min-height: 100%;
 }
 
 body {
