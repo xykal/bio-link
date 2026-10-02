@@ -35,25 +35,41 @@ try {
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    await page.waitForFunction(() => {
+      const root = document.querySelector('[aria-label="Tech stack"]');
+      const bounds = root?.getBoundingClientRect();
+      const icons = [...(root?.querySelectorAll("span") || [])];
+      return Boolean(bounds && icons.length === 20 && icons.every((icon) => {
+        const rect = icon.getBoundingClientRect();
+        return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+      }));
+    });
     const metrics = await page.evaluate(() => {
       const stackRoot = document.querySelector('[aria-label="Tech stack"]');
       const bounds = stackRoot?.getBoundingClientRect();
       const icons = [...(stackRoot?.querySelectorAll("span") || [])].map((item) => {
         const rect = item.getBoundingClientRect();
-        return { left: rect.left, right: rect.right };
+        return { left: rect.left, right: rect.right, top: rect.top };
       });
+      const content = [...(document.querySelector('.bio-page')?.children || [])].find((child) => child.classList.contains("my-auto"));
+      const heading = document.querySelector('.bio-page h1');
       return {
         width: innerWidth,
         documentWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth,
+        contentTop: content?.getBoundingClientRect().top ?? null,
+        headingTop: heading?.getBoundingClientRect().top ?? null,
         stackBounds: bounds ? { left: bounds.left, right: bounds.right } : null,
         icons,
       };
     });
     assert.ok(metrics.documentWidth <= metrics.clientWidth + 1, `public page overflow at ${viewport.width}px`);
+    assert.ok(metrics.contentTop !== null && metrics.contentTop >= 0, `public content must not be cropped above the viewport at ${viewport.width}px`);
+    assert.ok(metrics.headingTop !== null && metrics.headingTop >= 0, `profile heading must remain visible below the top edge at ${viewport.width}px`);
     assert.ok(metrics.stackBounds, "tech stack should be present");
     assert.equal(metrics.icons.length, 20, "all stack icons should remain visible");
-    assert.ok(metrics.icons.every((icon) => icon.left >= metrics.stackBounds.left - 1 && icon.right <= metrics.stackBounds.right + 1), `stack icons must wrap inside the page at ${viewport.width}px`);
+    assert.equal(new Set(metrics.icons.map((icon) => Math.round(icon.top))).size, 1, "stack must stay in its original single overlapping row");
+    assert.ok(metrics.icons.every((icon) => icon.left >= metrics.stackBounds.left - 1 && icon.right <= metrics.stackBounds.right + 1), `stack icons must fit inside the page at ${viewport.width}px`);
   }
 
   await page.unroute("**/api/data");

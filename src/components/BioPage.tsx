@@ -380,7 +380,30 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   }));
   const avatarPressTimer = useRef<number | null>(null);
   const avatarLong = useRef(false);
+  const stackContainerRef = useRef<HTMLDivElement>(null);
+  const [stackContainerWidth, setStackContainerWidth] = useState(448);
   const [likedSet, setLikedSet] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const node = stackContainerRef.current;
+    if (!node) return;
+    let animationFrame = 0;
+    const measure = () => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        setStackContainerWidth(node.getBoundingClientRect().width);
+      });
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [data?.stack.length, data?.sections?.stack]);
 
   // Semua setState terjadi di callback promise (asinkron) -> aman untuk aturan
   // react-hooks/set-state-in-effect (React Compiler, Next 16).
@@ -569,6 +592,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const linkRadius = LINK_RADIUS[data?.linkShape || "rounded"] ?? 16;
   const ringColor = isLight ? "#f7f7f9" : "#08080d";
   const stack = data?.stack || [];
+  const visibleStack = stack.filter((item) => Boolean(item.path));
+  const stackMarginLeft = visibleStack.length > 1
+    ? Math.min(20, Math.max(0, (stackContainerWidth - 36) / (visibleStack.length - 1))) - 36
+    : 0;
   const team = data?.team || [];
   const sections = data?.sections || { stack: true, team: true };
   const bubble = data?.bubble;
@@ -610,7 +637,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
   return (
     <main
-      className={`bio-page relative flex min-h-dvh w-full flex-col items-center justify-center overflow-x-hidden px-4 py-6 transition-colors ${
+      className={`bio-page relative flex min-h-dvh w-full flex-col items-center justify-start overflow-x-hidden px-4 py-6 transition-colors ${
         isLight ? "bg-[#f7f7f9] text-zinc-900" : "text-white"
       }`}
       style={{
@@ -643,7 +670,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
       ) : failed && !data ? (
         <ErrorState onRetry={retry} />
       ) : (
-        <div className="flex w-full max-w-md flex-col items-center">
+        <div className="my-auto flex w-full max-w-md flex-col items-center">
           {/* banner + avatar rapat: avatar menimpa banner seperti kartu profil */}
           <div className="relative w-full">
             {profile?.banner ? (
@@ -812,25 +839,30 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </p>
           )}
 
-          {/* Stack wraps into rows instead of compressing logos on narrow screens. */}
-          {sections.stack && stack.length > 0 && (
-            <div className={`mt-5 flex w-full items-center ${stackJustify}`} aria-label="Tech stack">
-              <div className={`flex w-full flex-wrap gap-2 ${stackJustify}`}>
-                {stack.map((s) => {
-                  if (!s.path) return null;
-                  return (
-                    <span
-                      key={s.id}
-                      title={s.title || s.slug}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-md"
-                      style={{ border: `2px solid ${ringColor}` }}
-                    >
-                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
-                        <path d={s.path} fill={`#${s.hex}`} />
-                      </svg>
-                    </span>
-                  );
-                })}
+          {/* Stack keeps the original overlapping logo row; overlap tightens only when needed to fit a narrow viewport. */}
+          {sections.stack && visibleStack.length > 0 && (
+            <div
+              ref={stackContainerRef}
+              className={`mt-5 flex w-full items-center ${stackJustify}`}
+              aria-label="Tech stack"
+            >
+              <div className="flex">
+                {visibleStack.map((s, index) => (
+                  <span
+                    key={s.id}
+                    title={s.title || s.slug}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-md"
+                    style={{
+                      marginLeft: index === 0 ? 0 : stackMarginLeft,
+                      zIndex: visibleStack.length - index,
+                      border: `2px solid ${ringColor}`,
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
+                      <path d={s.path} fill={`#${s.hex}`} />
+                    </svg>
+                  </span>
+                ))}
               </div>
             </div>
           )}
