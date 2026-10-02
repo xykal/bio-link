@@ -1,7 +1,7 @@
 # Local QA artifacts and local-only data must never ship with a deployment.
 admin-debug.png
 responsive-*.png
-data/
+/data/
 .env*
 node_modules/
 .next/
