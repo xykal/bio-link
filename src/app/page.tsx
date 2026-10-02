@@ -26,7 +26,10 @@ const getStore = cache(async () => {
 export async function generateViewport(): Promise<Viewport> {
   const store = await getStore();
   return {
-    themeColor: store?.theme === "light" ? "#f7f7f9" : "#08080d",
+    themeColor:
+      store?.theme === "light"
+        ? store.background?.lightColor || "#f7f7f9"
+        : store?.background?.darkColor || "#08080d",
     viewportFit: "cover",
   };
 }

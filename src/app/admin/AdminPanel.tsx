@@ -8,8 +8,10 @@ import { STACK_OPTIONS, getTechIcon } from "@/lib/stackIcons";
 import type {
   Store,
   LinkItem,
-  Socials,
   FontsConfig,
+  PageBackground,
+  ProfileFrameStyle,
+  AvatarOffset,
   SeoConfig,
   Branding,
   ProfileShape,
@@ -42,8 +44,16 @@ const SHAPES: { key: ProfileShape; label: string }[] = [
   { key: "custom", label: "Custom (gambar)" },
 ];
 
-const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
+const PROFILE_FRAMES: { key: ProfileFrameStyle; label: string; description: string }[] = [
+  { key: "none", label: "Minimal", description: "Tanpa bingkai" },
+  { key: "morph", label: "Morphing", description: "Warna organik" },
+  { key: "cartoon", label: "Kartun", description: "Sticker tebal" },
+  { key: "paper", label: "Kertas", description: "Tekstur hangat" },
+  { key: "neon", label: "Neon", description: "Glow warna" },
+  { key: "glass", label: "Glass", description: "Kaca lembut" },
+];
 
+const ACCENTS = ["#8b5cf6", "#06b6d4", "#f43f5e", "#f59e0b", "#22c55e", "#ec4899", "#3b82f6", "#0ea5e9", "#a855f7"];
 // Preset tema warna siap pakai (set aksen + mode)
 const THEME_PRESETS: { id: string; name: string; accent: string; mode: "dark" | "light" }[] = [
   { id: "violet", name: "Violet", accent: "#8b5cf6", mode: "dark" },
@@ -223,9 +233,28 @@ type StatsResp = {
   analytics: {
     total: number;
     byDay: Record<string, number>;
-    visits: { at: number; path: string; ref: string; ua: string }[];
+    visits: {
+      at: number;
+      path: string;
+      ref: string;
+      ua: string;
+      device?: string;
+      utmSource?: string;
+      utmMedium?: string;
+      utmCampaign?: string;
+    }[];
     clicks: number;
     linkClicks: Record<string, { title: string; count: number }>;
+    linkClickEvents: {
+      at: number;
+      linkId: string;
+      title: string;
+      ref: string;
+      device: string;
+      utmSource: string;
+      utmMedium: string;
+      utmCampaign: string;
+    }[];
     refs: Record<string, number>;
     devices: Record<string, number>;
   };
@@ -262,21 +291,6 @@ const EMPTY_LINK_FORM: LinkDraft = {
   kind: "link",
 };
 
-const SOCIAL_PLATFORMS: { key: keyof Socials; label: string; icon: string }[] = [
-  { key: "instagram", label: "Instagram", icon: "instagram" },
-  { key: "tiktok", label: "TikTok", icon: "tiktok" },
-  { key: "youtube", label: "YouTube", icon: "youtube" },
-  { key: "github", label: "GitHub", icon: "github" },
-  { key: "x", label: "X / Twitter", icon: "x" },
-  { key: "facebook", label: "Facebook", icon: "facebook" },
-  { key: "linkedin", label: "LinkedIn", icon: "linkedin" },
-  { key: "telegram", label: "Telegram", icon: "telegram" },
-  { key: "whatsapp", label: "WhatsApp", icon: "whatsapp" },
-  { key: "spotify", label: "Spotify", icon: "spotify" },
-  { key: "discord", label: "Discord", icon: "link" },
-  { key: "website", label: "Website", icon: "website" },
-];
-
 export default function AdminPanel() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [adminPassword, setAdminPassword] = useState("");
@@ -289,7 +303,11 @@ export default function AdminPanel() {
 
   // drafts
   const [profile, setProfile] = useState<Store["profile"] | null>(null);
-  const [social, setSocial] = useState<Socials | null>(null);
+  const [background, setBackground] = useState<PageBackground>({
+    darkColor: "#08080d",
+    lightColor: "#f7f7f9",
+    glowStrength: 22,
+  });
   const [stack, setStack] = useState<StackItem[]>([]);
   const [stackAlign, setStackAlign] = useState<StackAlign>("right");
   const [linkLayout, setLinkLayout] = useState<LinkLayout>("list");
@@ -327,6 +345,8 @@ export default function AdminPanel() {
   const [linkForm, setLinkForm] = useState<LinkDraft>(EMPTY_LINK_FORM);
   const [saveBusy, setSaveBusy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [previewDevice, setPreviewDevice] = useState<"mobile" | "tablet" | "desktop">("mobile");
+  const [clickLinkFilter, setClickLinkFilter] = useState("all");
   const [confirmReset, setConfirmReset] = useState(false);
 
   // ===== Perawatan (cache, rawat server, perawatan berkala otomatis) =====
@@ -469,7 +489,7 @@ export default function AdminPanel() {
       const d: Store = await r.json();
       setStore(d);
       setProfile(d.profile);
-      setSocial(d.social);
+      setBackground(d.background || { darkColor: "#08080d", lightColor: "#f7f7f9", glowStrength: 22 });
       setStack(d.stack || []);
       setStackAlign(d.stackAlign || "right");
       setLinkLayout(d.linkLayout || "list");
@@ -691,7 +711,7 @@ export default function AdminPanel() {
     if (r.ok) {
       const d = await r.json();
       setStore(d);
-      if (patch.social) setSocial(d.social);
+      if (patch.background) setBackground(d.background);
       if (patch.stack) setStack(d.stack);
       if (patch.stackAlign) setStackAlign(d.stackAlign);
       if (patch.linkLayout) setLinkLayout(d.linkLayout);
@@ -1236,24 +1256,46 @@ export default function AdminPanel() {
         {/* PREVIEW LIVE */}
         <Section
           title="Preview Halaman"
-          sub="Pratinjau langsung halaman bio sesuai data tersimpan."
+          sub="Pratinjau sesuai data tersimpan. Pilih lebar perangkat untuk cek responsif."
           right={
-            <button
-              onClick={() => setPreviewKey((k) => k + 1)}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
-            >
-              <Icon name="refresh" className="h-3.5 w-3.5" /> Muat ulang
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(["mobile", "tablet", "desktop"] as const).map((device) => (
+                <button
+                  key={device}
+                  type="button"
+                  onClick={() => setPreviewDevice(device)}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                    previewDevice === device
+                      ? "border-violet-400/60 bg-violet-500/20 text-white"
+                      : "border-white/10 bg-white/5 text-white/50 hover:text-white"
+                  }`}
+                >
+                  {device === "mobile" ? "Ponsel" : device === "tablet" ? "Tablet" : "Desktop"}
+                </button>
+              ))}
+              <button
+                onClick={() => setPreviewKey((k) => k + 1)}
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white/70 transition hover:text-white"
+              >
+                <Icon name="refresh" className="h-3.5 w-3.5" /> Muat ulang
+              </button>
+            </div>
           }
         >
-          <div className="flex justify-center rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-5">
-            <iframe
-              key={previewKey}
-              src={`/?_preview=${previewKey}`}
-              title="Preview halaman bio"
-              className="h-[80vh] max-h-[900px] min-h-[620px] w-full max-w-[460px] rounded-2xl border border-white/10"
-            />
-          </div>
+          {(() => {
+            const width = previewDevice === "mobile" ? 390 : previewDevice === "tablet" ? 768 : 1280;
+            return (
+              <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-5">
+                <iframe
+                  key={`${previewKey}-${previewDevice}`}
+                  src={`/?_preview=${previewKey}`}
+                  title={`Preview halaman bio ${previewDevice}`}
+                  className="h-[80vh] max-h-[900px] min-h-[620px] rounded-2xl border border-white/10"
+                  style={{ width, minWidth: width }}
+                />
+              </div>
+            );
+          })()}
         </Section>
 
             </>
@@ -1344,6 +1386,16 @@ export default function AdminPanel() {
                 onUpload={upload}
                 folder="bio-link/banner"
               />
+              <AvatarPlacementField
+                offset={profile.avatarOffset || { x: 0, y: 0 }}
+                hasBanner={Boolean(profile.banner)}
+                name={profile.name}
+                avatar={profile.avatar}
+                shape={profile.shape}
+                frameStyle={profile.frameStyle || "none"}
+                accent={profile.accent}
+                onChange={(avatarOffset) => setProfile({ ...profile, avatarOffset })}
+              />
 
               <Field label="Bentuk avatar">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
@@ -1363,6 +1415,37 @@ export default function AdminPanel() {
                       <span className="text-[10px] text-white/60">{s.label}</span>
                     </button>
                   ))}
+                </div>
+              </Field>
+
+              <Field
+                label="Preset bingkai visual"
+                hint="Pilih gaya siap pakai. Bingkai otomatis mengikuti bentuk avatar, termasuk bentuk bebas."
+              >
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {PROFILE_FRAMES.map((frame) => {
+                    const selected = (profile.frameStyle || "none") === frame.key;
+                    return (
+                      <button
+                        key={frame.key}
+                        type="button"
+                        onClick={() => setProfile({ ...profile, frameStyle: frame.key })}
+                        className={`flex min-h-16 items-center gap-3 rounded-xl border p-2.5 text-left transition ${
+                          selected
+                            ? "border-violet-400/70 bg-violet-500/15"
+                            : "border-white/10 bg-white/5 hover:border-white/30"
+                        }`}
+                      >
+                        <span
+                          className={`profile-frame-decoration profile-frame-${frame.key} shape-circle relative block h-9 w-9 shrink-0 border-4 border-black/30`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm text-white">{frame.label}</span>
+                          <span className="block text-[10px] text-white/40">{frame.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </Field>
 
@@ -1702,38 +1785,6 @@ export default function AdminPanel() {
             >
               + Tambah Link
             </button>
-          )}
-        </Section>
-
-        {/* SOSIAL */}
-        <Section
-          title="Sosial Media"
-          sub="Data tersimpan & dikembalikan API. Catatan: baris sosmed tidak lagi ditampilkan di halaman publik (sesuai permintaan) — bagian ini untuk mengelola datanya saja."
-        >
-          {social && (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {SOCIAL_PLATFORMS.map((pl) => (
-                  <div key={pl.key} className="flex items-center gap-2">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/60">
-                      <Icon name={pl.icon} className="h-4 w-4" />
-                    </span>
-                    <div className="flex-1">
-                      <label className="text-[11px] uppercase tracking-wider text-white/35">{pl.label}</label>
-                      <input
-                        className={inputCls}
-                        value={social[pl.key]}
-                        placeholder="https://…"
-                        onChange={(e) => setSocial({ ...social, [pl.key]: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => saveSettings({ social })} className={btnCls + " mt-4"}>
-                Simpan Sosial
-              </button>
-            </>
           )}
         </Section>
 
@@ -2237,6 +2288,57 @@ export default function AdminPanel() {
 
           {view === "tampilan" && (
             <>
+        <Section title="Background halaman & warna browser" sub="Atur latar publik. Warna dasar yang dipilih juga disinkronkan ke meta theme-color browser di perangkat mobile.">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Warna dasar mode gelap">
+                <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-2.5">
+                  <input
+                    aria-label="Warna dasar mode gelap"
+                    type="color"
+                    value={background.darkColor}
+                    onChange={(e) => setBackground({ ...background, darkColor: e.target.value })}
+                    className="h-10 w-12 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+                  />
+                  <span className="text-sm text-white/70">{background.darkColor.toUpperCase()}</span>
+                </div>
+              </Field>
+              <Field label="Warna dasar mode terang">
+                <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-2.5">
+                  <input
+                    aria-label="Warna dasar mode terang"
+                    type="color"
+                    value={background.lightColor}
+                    onChange={(e) => setBackground({ ...background, lightColor: e.target.value })}
+                    className="h-10 w-12 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+                  />
+                  <span className="text-sm text-white/70">{background.lightColor.toUpperCase()}</span>
+                </div>
+              </Field>
+            </div>
+            <Field label={`Glow aksen: ${background.glowStrength}%`} hint="Glow memakai warna aksen profil; geser ke 0% untuk latar polos.">
+              <input
+                type="range"
+                min={0}
+                max={40}
+                value={background.glowStrength}
+                onChange={(e) => setBackground({ ...background, glowStrength: Number(e.target.value) })}
+                className="w-full accent-violet-500"
+              />
+            </Field>
+            <div
+              className="flex min-h-20 items-end rounded-2xl border border-white/10 p-3 text-xs text-white/60"
+              style={{
+                backgroundColor: theme === "light" ? background.lightColor : background.darkColor,
+                backgroundImage: `radial-gradient(60% 100% at 50% 0%, ${profile?.accent || "#8b5cf6"}${Math.round(background.glowStrength * 2.55).toString(16).padStart(2, "0")}, transparent 75%)`,
+              }}
+            >
+              Preview latar · warna browser {theme === "light" ? background.lightColor : background.darkColor}
+            </div>
+            <button onClick={() => saveSettings({ background })} className={btnCls}>Simpan Background</button>
+          </div>
+        </Section>
+
         {/* FONTS */}
         <Section title="Gaya Font" sub="Font tiap elemen teks di halaman">
           {fonts && (
@@ -2345,6 +2447,93 @@ export default function AdminPanel() {
                 </div>
               </div>
 
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-white/80">Asal klik per link</p>
+                      <p className="text-[11px] text-white/35">Sumber referrer dan UTM; URL lengkap/IP tidak disimpan.</p>
+                    </div>
+                    <select
+                      value={clickLinkFilter}
+                      onChange={(e) => setClickLinkFilter(e.target.value)}
+                      className="max-w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
+                      aria-label="Filter statistik link"
+                    >
+                      <option value="all">Semua link</option>
+                      {topLinks(stats.analytics.linkClicks, 100).map((link) => (
+                        <option key={link.id} value={link.id}>{link.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="max-h-72 overflow-auto rounded-xl border border-white/10">
+                    <table className="w-full min-w-[600px] text-left text-xs">
+                      <thead className="sticky top-0 bg-[#111118] text-white/50">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Link</th>
+                          <th className="px-3 py-2 font-medium">Sumber</th>
+                          <th className="px-3 py-2 font-medium">Referrer</th>
+                          <th className="px-3 py-2 font-medium">Medium / kampanye</th>
+                          <th className="px-3 py-2 text-right font-medium">Klik</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clickSourceSummary(stats.analytics.linkClickEvents || [])
+                          .filter((row) => clickLinkFilter === "all" || row.linkId === clickLinkFilter)
+                          .map((row, i) => (
+                            <tr key={`${row.linkId}-${row.source}-${row.ref}-${i}`} className="border-t border-white/5">
+                              <td className="max-w-[180px] truncate px-3 py-2 text-white/80">{row.title}</td>
+                              <td className="px-3 py-2 text-white/65">{row.source}</td>
+                              <td className="px-3 py-2 text-white/45">{row.ref}</td>
+                              <td className="px-3 py-2 text-white/45">{row.medium} / {row.campaign}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-white/70">{row.count}</td>
+                            </tr>
+                          ))}
+                        {clickSourceSummary(stats.analytics.linkClickEvents || []).length === 0 && (
+                          <tr><td colSpan={5} className="px-3 py-4 text-center text-white/40">Rincian klik baru tercatat mulai sekarang; total klik lama tetap tersimpan.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-white/80">Riwayat klik terbaru</p>
+                  <div className="max-h-80 overflow-auto rounded-xl border border-white/10">
+                    <table className="w-full min-w-[680px] text-left text-xs">
+                      <thead className="sticky top-0 bg-[#111118] text-white/50">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Waktu</th>
+                          <th className="px-3 py-2 font-medium">Link</th>
+                          <th className="px-3 py-2 font-medium">Asal</th>
+                          <th className="px-3 py-2 font-medium">Referrer</th>
+                          <th className="px-3 py-2 font-medium">Kampanye</th>
+                          <th className="px-3 py-2 font-medium">Perangkat</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(stats.analytics.linkClickEvents || [])
+                          .filter((event) => clickLinkFilter === "all" || event.linkId === clickLinkFilter)
+                          .slice(0, 100)
+                          .map((event, i) => (
+                            <tr key={`${event.at}-${event.linkId}-${i}`} className="border-t border-white/5">
+                              <td className="whitespace-nowrap px-3 py-2 text-white/55">{new Date(event.at).toLocaleString("id-ID")}</td>
+                              <td className="max-w-[180px] truncate px-3 py-2 text-white/80">{event.title}</td>
+                              <td className="px-3 py-2 text-white/65">{event.utmSource || event.ref || "langsung"}</td>
+                              <td className="px-3 py-2 text-white/45">{event.ref || "langsung"}</td>
+                              <td className="px-3 py-2 text-white/45">{[event.utmMedium, event.utmCampaign].filter(Boolean).join(" / ") || "—"}</td>
+                              <td className="px-3 py-2 text-white/45">{DEVICE_LABELS[event.device] || event.device || "—"}</td>
+                            </tr>
+                          ))}
+                        {(stats.analytics.linkClickEvents || []).length === 0 && (
+                          <tr><td colSpan={6} className="px-3 py-4 text-center text-white/40">Belum ada event klik detail. Data akan muncul setelah link diklik setelah pembaruan ini.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-white/80">Sumber kunjungan</p>
@@ -2404,8 +2593,10 @@ export default function AdminPanel() {
                     <thead className="sticky top-0 bg-black/50 text-white/50">
                       <tr>
                         <th className="px-3 py-2 font-medium">Waktu</th>
-                        <th className="px-3 py-2 font-medium">Referrer</th>
-                        <th className="px-3 py-2 font-medium">User agent</th>
+                        <th className="px-3 py-2 font-medium">Asal / referrer</th>
+                        <th className="px-3 py-2 font-medium">UTM</th>
+                        <th className="px-3 py-2 font-medium">Perangkat</th>
+                        <th className="px-3 py-2 font-medium">Browser / user-agent</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2414,13 +2605,15 @@ export default function AdminPanel() {
                           <td className="whitespace-nowrap px-3 py-2 text-white/60">
                             {new Date(v.at).toLocaleString("id-ID")}
                           </td>
-                          <td className="px-3 py-2 text-white/50">{v.ref ? shortHost(v.ref) : "—"}</td>
+                          <td className="px-3 py-2 text-white/50">{v.ref ? shortHost(v.ref) : "langsung"}</td>
+                          <td className="px-3 py-2 text-white/45">{[v.utmSource, v.utmMedium, v.utmCampaign].filter(Boolean).join(" / ") || "—"}</td>
+                          <td className="px-3 py-2 text-white/50">{v.device ? DEVICE_LABELS[v.device] || v.device : "—"}</td>
                           <td className="max-w-[240px] truncate px-3 py-2 text-white/40">{v.ua || "—"}</td>
                         </tr>
                       ))}
                       {stats.analytics.visits.length === 0 && (
                         <tr>
-                          <td colSpan={3} className="px-3 py-4 text-center text-white/40">
+                          <td colSpan={5} className="px-3 py-4 text-center text-white/40">
                             Belum ada kunjungan tercatat.
                           </td>
                         </tr>
@@ -2777,6 +2970,34 @@ function topLinks(
     .map(([id, v]) => ({ id, title: v.title || id, count: v.count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, n);
+}
+
+function clickSourceSummary(events: StatsResp["analytics"]["linkClickEvents"]) {
+  const grouped = new Map<string, {
+    linkId: string;
+    title: string;
+    source: string;
+    ref: string;
+    medium: string;
+    campaign: string;
+    count: number;
+  }>();
+  for (const event of events || []) {
+    const source = event.utmSource || event.ref || "langsung";
+    const key = [event.linkId, source, event.ref, event.utmMedium, event.utmCampaign].join("|");
+    const current = grouped.get(key);
+    if (current) current.count++;
+    else grouped.set(key, {
+      linkId: event.linkId,
+      title: event.title || event.linkId,
+      source,
+      ref: event.ref || "langsung",
+      medium: event.utmMedium || "—",
+      campaign: event.utmCampaign || "—",
+      count: 1,
+    });
+  }
+  return [...grouped.values()].sort((a, b) => b.count - a.count).slice(0, 50);
 }
 
 const DEVICE_LABELS: Record<string, string> = {
@@ -3195,8 +3416,127 @@ function ImageField({ label, value, onChange, onUpload, folder }: {
   );
 }
 
-/* Avatar + crop: upload/pilih foto lalu geser di dalam lingkaran untuk
-   menentukan bagian mana yang ditampilkan (object-position). */
+function AvatarPlacementField({
+  offset,
+  hasBanner,
+  name,
+  avatar,
+  shape,
+  frameStyle,
+  accent,
+  onChange,
+}: {
+  offset: AvatarOffset;
+  hasBanner: boolean;
+  name: string;
+  avatar: string;
+  shape: ProfileShape;
+  frameStyle: ProfileFrameStyle;
+  accent: string;
+  onChange: (offset: AvatarOffset) => void;
+}) {
+  const previewRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number; clientX: number; clientY: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const previewShape = shape === "custom" ? "circle" : shape;
+  const left = `clamp(62px, calc(50% ${offset.x < 0 ? "-" : "+"} ${Math.abs(offset.x)}%), calc(100% - 62px))`;
+  const translateY = `clamp(${hasBanner ? "-44px" : "0px"}, ${offset.y}%, 129.6px)`;
+
+  function startDrag(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { ...offset, clientX: e.clientX, clientY: e.clientY };
+    setDragging(true);
+  }
+  function moveDrag(e: React.PointerEvent<HTMLDivElement>) {
+    const start = dragRef.current;
+    const bounds = previewRef.current?.getBoundingClientRect();
+    if (!start || !bounds) return;
+    const x = Math.max(-42, Math.min(42, start.x + ((e.clientX - start.clientX) / bounds.width) * 100));
+    const y = Math.max(-40, Math.min(120, start.y + ((e.clientY - start.clientY) / 108) * 100));
+    onChange({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+  }
+  function endDrag() {
+    dragRef.current = null;
+    setDragging(false);
+  }
+
+  return (
+    <Field
+      label="Posisi bingkai profil"
+      hint="Tarik foto/bingkai langsung di pratinjau. Crop foto di dalam bingkai bisa diatur pada kontrol foto di atas."
+    >
+      <div
+        ref={previewRef}
+        className="relative h-[220px] w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#17131f] to-[#0b0b12]"
+      >
+        {hasBanner && (
+          <div
+            className="absolute inset-x-3 top-3 h-[88px] rounded-xl border border-white/10 bg-gradient-to-r from-violet-500/30 via-fuchsia-500/20 to-cyan-500/20"
+            aria-hidden
+          />
+        )}
+        <div
+          className={`absolute z-10 h-[108px] w-[108px] touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{ left, top: hasBanner ? 44 : 8, transform: `translate(-50%, ${translateY})` }}
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onLostPointerCapture={endDrag}
+          onKeyDown={(e) => {
+            const step = e.shiftKey ? 10 : 2;
+            let x = offset.x;
+            let y = offset.y;
+            if (e.key === "ArrowLeft") x -= step;
+            else if (e.key === "ArrowRight") x += step;
+            else if (e.key === "ArrowUp") y -= step;
+            else if (e.key === "ArrowDown") y += step;
+            else return;
+            e.preventDefault();
+            onChange({ x: Math.max(-42, Math.min(42, x)), y: Math.max(-40, Math.min(120, y)) });
+          }}
+          role="slider"
+          aria-label="Tarik untuk mengatur posisi bingkai foto profil"
+          aria-valuemin={-42}
+          aria-valuemax={42}
+          aria-valuenow={Math.round(offset.x)}
+          aria-valuetext={`horizontal ${Math.round(offset.x)}, vertikal ${Math.round(offset.y)}`}
+          tabIndex={0}
+        >
+          {frameStyle !== "none" && (
+            <span
+              aria-hidden
+              className={`profile-frame-decoration profile-frame-${frameStyle} pointer-events-none absolute -inset-1.5 z-0 shape-${previewShape}`}
+            />
+          )}
+          <span className={`relative z-10 flex h-full w-full items-center justify-center overflow-hidden bg-white/10 text-3xl font-bold text-white shape-${previewShape}`}>
+            {avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={optImg(avatar, { w: 216, h: 216, crop: "fill" })} alt="" draggable={false} className="h-full w-full object-cover" />
+            ) : (
+              (name || "?").charAt(0).toUpperCase()
+            )}
+          </span>
+        </div>
+        <div className="absolute inset-x-3 bottom-7 text-center" style={{ transform: `translateY(${Math.max(0, offset.y)}%)` }}>
+          <p className="truncate text-sm font-semibold text-white">{name || "Nama profil"}</p>
+          <p className="mt-1 text-[10px] text-white/40">Tarik foto ke posisi yang diinginkan</p>
+        </div>
+        <span className="absolute bottom-2 left-3 text-[10px] text-white/30">Preview posisi</span>
+        <span className="absolute bottom-2 right-3 h-2 w-2 rounded-full" style={{ background: accent }} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-xs text-white/40">
+        <span>Foto X: {Math.round(offset.x)}% · Y: {Math.round(offset.y)}%</span>
+        <button type="button" onClick={() => onChange({ x: 0, y: 0 })} className="text-violet-300 hover:underline">
+          Reset ke tengah
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+/* Avatar crop: geser isi foto di dalam bingkai untuk menentukan bagian yang ditampilkan. */
 function AvatarCropField({ value, pos, onChange, onPosChange, onUpload }: {
   value: string;
   pos: string;

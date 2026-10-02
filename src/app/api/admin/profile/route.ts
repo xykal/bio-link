@@ -38,6 +38,19 @@ export async function PATCH(req: Request) {
   ) {
     store.profile.shape = body.shape;
   }
+  if (["none", "morph", "cartoon", "paper", "neon", "glass"].includes(body.frameStyle)) {
+    store.profile.frameStyle = body.frameStyle;
+  }
+  if (body.avatarOffset && typeof body.avatarOffset === "object") {
+    const x = Number(body.avatarOffset.x);
+    const y = Number(body.avatarOffset.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      store.profile.avatarOffset = {
+        x: Math.max(-42, Math.min(42, x)),
+        y: Math.max(-40, Math.min(120, y)),
+      };
+    }
+  }
   // Path SVG utk bentuk bebas (shape="custom"). Koordinat 0..1.
   if (typeof body.customShape === "string") {
     store.profile.customShape = body.customShape.slice(0, 8000);

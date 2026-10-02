@@ -20,6 +20,14 @@ export async function POST(req: Request) {
   const store = await readStore();
   const link = store.links.find((item) => item.id === linkId && item.enabled);
   if (!link) return NextResponse.json({ error: "Link tidak ditemukan" }, { status: 404 });
-  await trackLinkClick(link.id, link.title);
+  const ref = typeof body.referrer === "string" ? body.referrer.slice(0, 300) : "";
+  const ua = (req.headers.get("user-agent") || "").slice(0, 200);
+  await trackLinkClick(link.id, link.title, {
+    ref,
+    ua,
+    utmSource: typeof body.utmSource === "string" ? body.utmSource : "",
+    utmMedium: typeof body.utmMedium === "string" ? body.utmMedium : "",
+    utmCampaign: typeof body.utmCampaign === "string" ? body.utmCampaign : "",
+  });
   return NextResponse.json({ ok: true });
 }

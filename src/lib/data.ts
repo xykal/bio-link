@@ -178,6 +178,16 @@ export type Member = {
   url: string; // link profil (opsional)
 };
 
+export type ProfileFrameStyle = "none" | "morph" | "cartoon" | "paper" | "neon" | "glass";
+
+export type AvatarOffset = { x: number; y: number }; // x: % lebar kartu, y: % tinggi avatar
+
+export type PageBackground = {
+  darkColor: string;
+  lightColor: string;
+  glowStrength: number; // persen, 0..40
+};
+
 export type Profile = {
   name: string;
   handle: string;
@@ -187,6 +197,8 @@ export type Profile = {
   accent: string; // theme accent color
   shape: ProfileShape;
   avatarPos?: string; // object-position foto avatar, mis. "50% 20%"
+  avatarOffset?: AvatarOffset; // posisi bingkai avatar yang bisa di-drag
+  frameStyle?: ProfileFrameStyle; // preset bingkai visual, mengikuti bentuk avatar
   customShape?: string; // SVG path (koordinat 0..1) utk shape="custom"
 };
 
@@ -266,6 +278,7 @@ export type Store = {
   fonts: FontsConfig;
   seo: SeoConfig;
   theme: ThemeMode;
+  background: PageBackground;
   linkShape: LinkShape;
   stackAlign: StackAlign;
   linkLayout: LinkLayout;
@@ -304,6 +317,8 @@ const DEFAULT_STORE: Store = {
     accent: "#8b5cf6",
     shape: "circle",
     avatarPos: "50% 50%",
+    avatarOffset: { x: 0, y: 0 },
+    frameStyle: "none",
     customShape: "",
   },
   links: [
@@ -387,6 +402,7 @@ const DEFAULT_STORE: Store = {
     rulesUrl: "https://rules.xyc.my.id/",
   },
   theme: "dark",
+  background: { darkColor: "#08080d", lightColor: "#f7f7f9", glowStrength: 22 },
   linkShape: "rounded",
   stackAlign: "right",
   linkLayout: "list",
@@ -413,6 +429,15 @@ export function normalize(parsed: Partial<Store>): Store {
         typeof (parsed.profile || {}).avatarPos === "string"
           ? (parsed.profile as Profile).avatarPos
           : d.profile.avatarPos,
+      avatarOffset: {
+        x: Math.max(-42, Math.min(42, Number((parsed.profile as Profile | undefined)?.avatarOffset?.x) || 0)),
+        y: Math.max(-40, Math.min(120, Number((parsed.profile as Profile | undefined)?.avatarOffset?.y) || 0)),
+      },
+      frameStyle: (["none", "morph", "cartoon", "paper", "neon", "glass"] as const).includes(
+        (parsed.profile as Profile | undefined)?.frameStyle as never
+      )
+        ? (parsed.profile as Profile).frameStyle
+        : d.profile.frameStyle,
       customShape:
         typeof (parsed.profile || {}).customShape === "string"
           ? ((parsed.profile as Profile).customShape || "").slice(0, 8000)
@@ -519,6 +544,20 @@ export function normalize(parsed: Partial<Store>): Store {
     fonts: { ...d.fonts, ...(parsed.fonts || {}) },
     seo: { ...d.seo, ...(parsed.seo || {}) },
     theme: parsed.theme === "light" ? "light" : "dark",
+    background: {
+      darkColor:
+        typeof parsed.background?.darkColor === "string" && /^#[0-9a-fA-F]{6}$/.test(parsed.background.darkColor)
+          ? parsed.background.darkColor
+          : d.background.darkColor,
+      lightColor:
+        typeof parsed.background?.lightColor === "string" && /^#[0-9a-fA-F]{6}$/.test(parsed.background.lightColor)
+          ? parsed.background.lightColor
+          : d.background.lightColor,
+      glowStrength: Math.max(
+        0,
+        Math.min(40, Number.isFinite(parsed.background?.glowStrength) ? parsed.background!.glowStrength : d.background.glowStrength)
+      ),
+    },
     linkShape: (["pill", "rounded", "soft", "square"] as const).includes(
       parsed.linkShape as never
     )

@@ -16,6 +16,7 @@ export type PublicData = {
   stories: Store["stories"];
   fonts: Store["fonts"];
   theme: "dark" | "light";
+  background: Store["background"];
   linkShape: Store["linkShape"];
   stackAlign: Store["stackAlign"];
   linkLayout: Store["linkLayout"];
@@ -36,9 +37,20 @@ function getXycGate(): XycGateApi | undefined {
   return (window as Window & { XycGate?: XycGateApi }).XycGate;
 }
 
+function getAttribution() {
+  if (typeof window === "undefined") return {};
+  const query = new URLSearchParams(window.location.search);
+  return {
+    referrer: document.referrer,
+    utmSource: query.get("utm_source") || "",
+    utmMedium: query.get("utm_medium") || "",
+    utmCampaign: query.get("utm_campaign") || "",
+  };
+}
+
 // Catat klik link. Pakai sendBeacon agar tetap terkirim walau tab berpindah.
 function trackLinkClick(id: string, title: string) {
-  const body = JSON.stringify({ linkId: id, title });
+  const body = JSON.stringify({ linkId: id, title, ...getAttribution() });
   try {
     if (navigator.sendBeacon) {
       navigator.sendBeacon(
@@ -152,6 +164,7 @@ function toPublic(s: Store): PublicData {
     stories: s.stories || [],
     fonts: s.fonts,
     theme: s.theme,
+    background: s.background,
     linkShape: s.linkShape || "rounded",
     stackAlign: s.stackAlign || "right",
     linkLayout: s.linkLayout || "list",
@@ -444,9 +457,13 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     document.head.appendChild(s);
   }, [rulesOrigin]);
 
-  // Hitung kunjungan sekali per buka halaman.
+  // Hitung kunjungan dan atribusi sumber hanya sekali per buka halaman.
   useEffect(() => {
-    fetch("/api/track", { method: "POST" }).catch(() => {});
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(getAttribution()),
+    }).catch(() => {});
   }, []);
 
   // Prefetch chunk StoryViewer saat senggang (2,5 dtk setelah load): begitu
@@ -586,11 +603,18 @@ export default function BioPage({ initial }: { initial: Store | null }) {
   const rgb = useMemo(() => hexToRgb(accent), [accent]);
   const isLight = data?.theme === "light";
   const avatarPos = profile?.avatarPos || "50% 50%";
+  const avatarOffset = profile?.avatarOffset || { x: 0, y: 0 };
+  const frameStyle = profile?.frameStyle || "none";
+  const avatarNameGap = (profile?.banner ? 52 : 16) + Math.max(0, avatarOffset.y * 1.08);
   const shape = profile?.shape || "circle";
   const customShape = profile?.customShape || "";
   const isCustomShape = shape === "custom" && customShape.length > 0;
   const linkRadius = LINK_RADIUS[data?.linkShape || "rounded"] ?? 16;
-  const ringColor = isLight ? "#f7f7f9" : "#08080d";
+  const pageBackground = isLight
+    ? data?.background?.lightColor || "#f7f7f9"
+    : data?.background?.darkColor || "#08080d";
+  const glowStrength = Math.max(0, Math.min(40, data?.background?.glowStrength ?? 22));
+  const ringColor = pageBackground;
   const stack = data?.stack || [];
   const visibleStack = stack.filter((item) => Boolean(item.path));
   const stackMarginLeft = visibleStack.length > 1
@@ -635,13 +659,19 @@ export default function BioPage({ initial }: { initial: Store | null }) {
     [accent, rgb, data?.fonts]
   );
 
+  useEffect(() => {
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute("content", pageBackground);
+  }, [pageBackground]);
+
   return (
     <main
       className={`bio-page relative flex min-h-dvh w-full flex-col items-center justify-start overflow-x-hidden px-4 py-6 transition-colors ${
-        isLight ? "bg-[#f7f7f9] text-zinc-900" : "text-white"
+        isLight ? "text-zinc-900" : "text-white"
       }`}
       style={{
         ...cssVars,
+        backgroundColor: pageBackground,
         paddingTop: "max(1.5rem, env(safe-area-inset-top))",
         paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
       }}
@@ -651,7 +681,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
-            backgroundImage: `radial-gradient(60% 50% at 50% -5%, rgba(${rgb.r},${rgb.g},${rgb.b},0.22), transparent 70%), radial-gradient(40% 40% at 85% 15%, rgba(${rgb.r},${rgb.g},${rgb.b},0.12), transparent 70%), radial-gradient(55% 45% at 10% 90%, rgba(${rgb.r},${rgb.g},${rgb.b},0.10), transparent 70%)`,
+            backgroundImage: `radial-gradient(60% 50% at 50% -5%, rgba(${rgb.r},${rgb.g},${rgb.b},${glowStrength / 100}), transparent 70%), radial-gradient(40% 40% at 85% 15%, rgba(${rgb.r},${rgb.g},${rgb.b},${(glowStrength * 0.55) / 100}), transparent 70%), radial-gradient(55% 45% at 10% 90%, rgba(${rgb.r},${rgb.g},${rgb.b},${(glowStrength * 0.45) / 100}), transparent 70%)`,
           }}
         />
       )}
@@ -660,7 +690,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
-            backgroundImage: `radial-gradient(60% 55% at 50% -5%, rgba(${rgb.r},${rgb.g},${rgb.b},0.16), transparent 70%), linear-gradient(180deg,#ffffff,#f4f4f6)`,
+            backgroundImage: `radial-gradient(60% 55% at 50% -5%, rgba(${rgb.r},${rgb.g},${rgb.b},${(glowStrength * 0.7) / 100}), transparent 70%), radial-gradient(45% 45% at 100% 100%, rgba(${rgb.r},${rgb.g},${rgb.b},${(glowStrength * 0.18) / 100}), transparent 75%)`,
           }}
         />
       )}
@@ -671,8 +701,8 @@ export default function BioPage({ initial }: { initial: Store | null }) {
         <ErrorState onRetry={retry} />
       ) : (
         <div className="my-auto flex w-full max-w-md flex-col items-center">
-          {/* banner + avatar rapat: avatar menimpa banner seperti kartu profil */}
-          <div className="relative w-full">
+          {/* banner + avatar rapat: posisi avatar diatur dengan drag dari Admin */}
+          <div className="relative w-full" style={{ height: profile?.banner ? 112 : 108 }}>
             {profile?.banner ? (
               <div className="w-full overflow-hidden rounded-3xl border border-black/5 shadow-2xl">
                 {/* Banner = elemen LCP: wajib eager + prioritas tinggi.
@@ -692,12 +722,14 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
             {/* Avatar + bubble: wrapper jadi anchor posisi gelembung pesan */}
             <div
-              className={
-                profile?.banner
-                  ? "absolute left-1/2 -translate-x-1/2 -bottom-10"
-                  : "relative mx-auto"
-              }
-              style={{ width: 108, height: 108 }}
+              className="absolute"
+              style={{
+                width: 108,
+                height: 108,
+                left: `clamp(62px, calc(50% ${avatarOffset.x < 0 ? "-" : "+"} ${Math.abs(avatarOffset.x)}%), calc(100% - 62px))`,
+                top: profile?.banner ? 44 : 0,
+                transform: `translate(-50%, clamp(${profile?.banner ? "-44px" : "0px"}, ${avatarOffset.y}%, 129.6px))`,
+              }}
             >
               {/* Ring story ala IG: gradasi ungu; tersegmentasi kalau story > 1 */}
               {hasStories && (
@@ -754,7 +786,16 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                   </defs>
                 </svg>
               )}
-              {/* Avatar: pure foto, tanpa ring/bingkai — langsung di-clip ke shape */}
+              {frameStyle !== "none" && (
+                <span
+                  aria-hidden
+                  className={`profile-frame-decoration profile-frame-${frameStyle} pointer-events-none absolute -inset-1.5 z-0 ${
+                    isCustomShape ? "" : `shape-${shape}`
+                  }`}
+                  style={isCustomShape ? { clipPath: "url(#bio-avatar-clip)" } : undefined}
+                />
+              )}
+              {/* Foto profil di-clip ke bentuk; bingkai visual mengikuti shape yang sama */}
               <div
                 className={`avatar-frame ${
                   isCustomShape ? "" : `shape-${shape}`
@@ -823,7 +864,7 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           {/* name */}
           <h1
             className="text-2xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-name)", marginTop: profile?.banner ? 52 : 16 }}
+            style={{ fontFamily: "var(--font-name)", marginTop: avatarNameGap }}
           >
             {profile?.name}
           </h1>

@@ -18,6 +18,7 @@ export async function GET() {
       stories: s.stories,
       fonts: s.fonts,
       theme: s.theme,
+      background: s.background,
       linkShape: s.linkShape,
       stackAlign: s.stackAlign,
       linkLayout: s.linkLayout,

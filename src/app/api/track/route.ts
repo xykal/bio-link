@@ -10,8 +10,18 @@ export async function POST(req: Request) {
   if (!rate.ok) {
     return NextResponse.json({ error: "Terlalu sering" }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } });
   }
-  const ref = req.headers.get("referer") || "";
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength > 4096) return NextResponse.json({ error: "Request terlalu besar" }, { status: 413 });
+  const body = await req.json().catch(() => ({}));
+  const ref = typeof body.referrer === "string" ? body.referrer.slice(0, 300) : "";
   const ua = (req.headers.get("user-agent") || "").slice(0, 200);
-  await trackVisit({ path: "/", ref: ref.slice(0, 200), ua });
+  await trackVisit({
+    path: "/",
+    ref,
+    ua,
+    utmSource: typeof body.utmSource === "string" ? body.utmSource : "",
+    utmMedium: typeof body.utmMedium === "string" ? body.utmMedium : "",
+    utmCampaign: typeof body.utmCampaign === "string" ? body.utmCampaign : "",
+  });
   return NextResponse.json({ ok: true });
 }

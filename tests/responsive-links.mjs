@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-const base = process.env.BASE_URL || "http://127.0.0.1:3111";
+const base = process.env.BASE_URL || "http://localhost:3111";
 const viewports = [
   { width: 320, height: 640 },
   { width: 360, height: 800 },
@@ -28,7 +28,16 @@ try {
   await page.route("**/api/data", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ ...seed, stack }),
+    body: JSON.stringify({
+      ...seed,
+      stack,
+      profile: {
+        ...seed.profile,
+        shape: "hexagon",
+        frameStyle: "paper",
+        avatarOffset: { x: 34, y: 34 },
+      },
+    }),
   }));
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.locator('[aria-label="Tech stack"] span').nth(19).waitFor();
@@ -53,6 +62,8 @@ try {
       });
       const content = [...(document.querySelector('.bio-page')?.children || [])].find((child) => child.classList.contains("my-auto"));
       const heading = document.querySelector('.bio-page h1');
+      const frame = document.querySelector('.bio-page .profile-frame-decoration');
+      const frameRect = frame?.getBoundingClientRect();
       return {
         width: innerWidth,
         documentWidth: document.documentElement.scrollWidth,
@@ -64,6 +75,7 @@ try {
           .find((child) => child.getAttribute("aria-hidden") === "true")?.getBoundingClientRect().height ?? null,
         contentTop: content?.getBoundingClientRect().top ?? null,
         headingTop: heading?.getBoundingClientRect().top ?? null,
+        frameBounds: frameRect ? { left: frameRect.left, right: frameRect.right, top: frameRect.top } : null,
         stackBounds: bounds ? { left: bounds.left, right: bounds.right } : null,
         icons,
       };
@@ -74,6 +86,8 @@ try {
     assert.ok(metrics.backgroundHeight !== null && Math.abs(metrics.backgroundHeight - metrics.mainHeight) <= 1, `background should cover the full page at ${viewport.width}px`);
     assert.ok(metrics.contentTop !== null && metrics.contentTop >= 0, `public content must not be cropped above the viewport at ${viewport.width}px`);
     assert.ok(metrics.headingTop !== null && metrics.headingTop >= 0, `profile heading must remain visible below the top edge at ${viewport.width}px`);
+    assert.ok(metrics.frameBounds, "selected profile frame should be present");
+    assert.ok(metrics.frameBounds.left >= -1 && metrics.frameBounds.right <= viewport.width + 1, `profile frame must fit the viewport at ${viewport.width}px`);
     assert.ok(metrics.stackBounds, "tech stack should be present");
     assert.equal(metrics.icons.length, 20, "all stack icons should remain visible");
     assert.equal(new Set(metrics.icons.map((icon) => Math.round(icon.top))).size, 1, "stack must stay in its original single overlapping row");
@@ -89,12 +103,32 @@ try {
   await page.getByRole("button", { name: "Buka menu" }).click();
   await page.getByRole("button", { name: "Link", exact: true }).click();
   await page.getByRole("heading", { name: "Link", exact: true }).waitFor();
+  assert.equal(await page.getByRole("heading", { name: "Sosial Media", exact: true }).count(), 0, "duplicate Social Media admin section should be removed");
 
   const csrfStatus = await page.request.post(`${base}/api/admin/reset`, {
     headers: { Origin: "https://untrusted.example" },
     data: {},
   }).then((response) => response.status());
   assert.equal(csrfStatus, 403, "cross-origin admin state changes must be rejected");
+
+  const analyticsLinks = await page.request.get(`${base}/api/data`).then((response) => response.json());
+  const analyticsLink = analyticsLinks.links.find((link) => link.enabled);
+  assert.ok(analyticsLink?.id, "an enabled link should exist for click analytics QA");
+  const clickStatus = await page.request.post(`${base}/api/track/click`, {
+    data: {
+      linkId: analyticsLink.id,
+      referrer: "https://instagram.com/qa?private=value",
+      utmSource: "instagram",
+      utmMedium: "social",
+      utmCampaign: "responsive-qa",
+    },
+  }).then((response) => response.status());
+  assert.equal(clickStatus, 200, "click event should be recorded");
+  const analytics = await page.request.get(`${base}/api/admin/stats`).then((response) => response.json());
+  const clickEvent = analytics.analytics.linkClickEvents.find((event) => event.utmCampaign === "responsive-qa");
+  assert.equal(clickEvent?.linkId, analyticsLink.id, "click event should identify the clicked link");
+  assert.equal(clickEvent?.ref, "instagram.com", "click analytics should store only referrer host");
+  assert.equal(clickEvent?.utmSource, "instagram", "click analytics should retain UTM source");
 
   await page.evaluate(async () => {
     const data = await fetch("/api/data").then((response) => response.json());
@@ -153,6 +187,53 @@ try {
       }));
       assert.ok(metrics.documentWidth <= metrics.clientWidth + 1, `admin #${section} overflow at ${viewport.width}px`);
     }
+  }
+
+  await page.goto(`${base}/admin#profil`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Posisi bingkai profil", { exact: true }).waitFor();
+  const avatarPosition = page.getByRole("slider", { name: "Tarik untuk mengatur posisi bingkai foto profil" });
+  await avatarPosition.scrollIntoViewIfNeeded();
+  const initialPosition = await avatarPosition.getAttribute("aria-valuetext");
+  const avatarBox = await avatarPosition.boundingBox();
+  assert.ok(avatarBox, "draggable avatar preview should render");
+  await page.mouse.move(avatarBox.x + avatarBox.width / 2, avatarBox.y + avatarBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(avatarBox.x + avatarBox.width / 2 + 35, avatarBox.y + avatarBox.height / 2 + 25, { steps: 4 });
+  await page.mouse.up();
+  assert.notEqual(await avatarPosition.getAttribute("aria-valuetext"), initialPosition, "avatar position should respond to drag");
+  await page.getByRole("button", { name: /Kartun/ }).click();
+
+  await page.goto(`${base}/admin#tampilan`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Background halaman & warna browser", { exact: true }).waitFor();
+  assert.equal(await page.getByLabel("Warna dasar mode gelap").count(), 1, "dark background color control should exist");
+  assert.equal(await page.getByLabel("Warna dasar mode terang").count(), 1, "light background color control should exist");
+
+  await page.goto(`${base}/admin#preview`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Preview Halaman", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Tablet", exact: true }).click();
+  assert.equal(await page.locator('iframe[title^="Preview halaman bio"]').evaluate((frame) => getComputedStyle(frame).width), "768px", "tablet preview should use tablet width");
+  await page.getByRole("button", { name: "Desktop", exact: true }).click();
+  assert.equal(await page.locator('iframe[title^="Preview halaman bio"]').evaluate((frame) => getComputedStyle(frame).width), "1280px", "desktop preview should use desktop width");
+
+  await page.goto(`${base}/admin#stats`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Asal klik per link", { exact: true }).waitFor();
+  await page.getByText("Riwayat klik terbaru", { exact: true }).waitFor();
+
+  const originalBackground = await page.request.get(`${base}/api/admin`).then((response) => response.json()).then((data) => data.background);
+  try {
+    const testBackground = { ...originalBackground, darkColor: "#123456" };
+    const saveBackground = await page.request.patch(`${base}/api/admin/settings`, {
+      headers: { Origin: base },
+      data: { background: testBackground },
+    });
+    assert.equal(saveBackground.status(), 200, "background settings should save");
+    await page.goto(`${base}/?theme-color-qa=1`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector('meta[name="theme-color"]')?.getAttribute("content") === "#123456");
+  } finally {
+    await page.request.patch(`${base}/api/admin/settings`, {
+      headers: { Origin: base },
+      data: { background: originalBackground },
+    });
   }
 
   assert.deepEqual(errors, [], `browser errors: ${errors.join("; ")}`);

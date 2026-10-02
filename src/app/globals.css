@@ -106,6 +106,44 @@ body {
   }
 }
 
+/* Built-in profile frame styles; the selected avatar shape clips every preset. */
+.profile-frame-decoration {
+  box-sizing: border-box;
+  transition: filter 180ms ease, opacity 180ms ease;
+}
+.profile-frame-morph {
+  background: conic-gradient(from 0deg, #8b5cf6, #22d3ee, #e879f9, #f59e0b, #8b5cf6);
+  animation: profile-frame-hue 9s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 7px rgba(139, 92, 246, 0.42));
+}
+.profile-frame-cartoon {
+  background: linear-gradient(135deg, #facc15, #fb7185 55%, #38bdf8);
+  filter: drop-shadow(2px 3px 0 #111827) drop-shadow(-1px -1px 0 #fff);
+}
+.profile-frame-paper {
+  background-color: #f4e5c5;
+  background-image: repeating-linear-gradient(18deg, rgba(113, 78, 40, 0.14) 0 1px, transparent 1px 6px), linear-gradient(135deg, #fff8e8, #d6bd91);
+  filter: drop-shadow(0 4px 3px rgba(25, 20, 14, 0.45));
+}
+.profile-frame-neon {
+  background: conic-gradient(from 40deg, #22d3ee, #a3e635, #f0abfc, #22d3ee);
+  animation: profile-frame-hue 5s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.58));
+}
+.profile-frame-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(196, 181, 253, 0.52) 48%, rgba(255, 255, 255, 0.8));
+  filter: drop-shadow(0 3px 9px rgba(255, 255, 255, 0.2));
+}
+@keyframes profile-frame-hue {
+  to { filter: hue-rotate(75deg) saturate(1.35) drop-shadow(0 0 8px rgba(139, 92, 246, 0.42)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-frame-morph,
+  .profile-frame-neon {
+    animation: none;
+  }
+}
+
 /* long-press avatar: no native context menu / text selection / drag */
 .avatar-frame {
   -webkit-touch-callout: none;

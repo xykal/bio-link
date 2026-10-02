@@ -113,6 +113,24 @@ export async function PATCH(req: Request) {
   if (body.theme === "dark" || body.theme === "light") {
     store.theme = body.theme;
   }
+  if (body.background && typeof body.background === "object") {
+    const darkColor = body.background.darkColor;
+    const lightColor = body.background.lightColor;
+    const glowStrength = Number(body.background.glowStrength);
+    store.background = {
+      darkColor:
+        typeof darkColor === "string" && /^#[0-9a-fA-F]{6}$/.test(darkColor)
+          ? darkColor
+          : store.background.darkColor,
+      lightColor:
+        typeof lightColor === "string" && /^#[0-9a-fA-F]{6}$/.test(lightColor)
+          ? lightColor
+          : store.background.lightColor,
+      glowStrength: Number.isFinite(glowStrength)
+        ? Math.max(0, Math.min(40, glowStrength))
+        : store.background.glowStrength,
+    };
+  }
   if (body.branding && typeof body.branding === "object") {
     store.branding = { ...store.branding, ...body.branding };
   }

@@ -7,8 +7,27 @@ import { randomAnonName } from "./names";
 // tabel `store`) kalau dikonfigurasi, else file data/analytics.json (dev).
 // Di serverless read-only tanpa D1, write gagal diam-diam -> tetap jalan in-memory.
 
-export type Visit = { at: number; path: string; ref: string; ua: string };
+export type Visit = {
+  at: number;
+  path: string;
+  ref: string; // host referrer saja, bukan URL/query lengkap
+  ua: string;
+  device?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+};
 export type LinkClick = { title: string; count: number };
+export type LinkClickEvent = {
+  at: number;
+  linkId: string;
+  title: string;
+  ref: string;
+  device: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+};
 export type VisitorRec = {
   name: string;
   liked: string[]; // storyId yg udah di-like (1x per visitor)
@@ -21,6 +40,7 @@ export type AnalyticsData = {
   visits: Visit[];
   clicks: number; // total klik link
   linkClicks: Record<string, LinkClick>; // key: linkId
+  linkClickEvents: LinkClickEvent[]; // rincian klik terbaru (dibatasi)
   refs: Record<string, number>; // key: host referrer
   devices: Record<string, number>; // key: mobile|desktop|tablet|bot
   visitors: Record<string, VisitorRec>; // key: visitorId (anon)
@@ -32,6 +52,7 @@ const EMPTY: AnalyticsData = {
   visits: [],
   clicks: 0,
   linkClicks: {},
+  linkClickEvents: [],
   refs: {},
   devices: {},
   visitors: {},
@@ -51,6 +72,7 @@ function merge(raw: Partial<AnalyticsData>): AnalyticsData {
     visits: Array.isArray(raw.visits) ? raw.visits : [],
     clicks: typeof raw.clicks === "number" ? raw.clicks : 0,
     linkClicks: raw.linkClicks && typeof raw.linkClicks === "object" ? raw.linkClicks : {},
+    linkClickEvents: Array.isArray(raw.linkClickEvents) ? raw.linkClickEvents.slice(0, 500) : [],
     refs: raw.refs && typeof raw.refs === "object" ? raw.refs : {},
     devices: raw.devices && typeof raw.devices === "object" ? raw.devices : {},
     visitors: raw.visitors && typeof raw.visitors === "object" ? raw.visitors : {},
@@ -78,10 +100,10 @@ async function write(data: AnalyticsData) {
   cache = data;
   try {
     if (useD1) {
-      const json = JSON.stringify(data).replace(/'/g, "''");
       await d1Query(
-        `INSERT INTO ${TABLE} (id, data) VALUES (${ROW_ID}, '${json}')
-         ON CONFLICT(id) DO UPDATE SET data = excluded.data;`
+        `INSERT INTO ${TABLE} (id, data) VALUES (?, ?)
+         ON CONFLICT(id) DO UPDATE SET data = excluded.data;`,
+        [ROW_ID, JSON.stringify(data)]
       );
     } else {
       await fs.mkdir(DATA_DIR, { recursive: true });
@@ -114,27 +136,60 @@ function deviceOf(ua: string) {
   return "desktop";
 }
 
-export async function trackVisit(v: Omit<Visit, "at">): Promise<void> {
+function safeTag(value: unknown) {
+  return typeof value === "string"
+    ? value.trim().replace(/[^a-zA-Z0-9._ -]/g, "").slice(0, 80)
+    : "";
+}
+
+export async function trackVisit(v: Omit<Visit, "at" | "device">): Promise<void> {
   const data = await read();
   const now = Date.now();
   const key = dayKey(now);
+  const ua = (v.ua || "").slice(0, 200);
   const host = hostOf(v.ref);
-  const device = deviceOf(v.ua);
+  const device = deviceOf(ua);
+  const visit: Visit = {
+    at: now,
+    path: (v.path || "/").slice(0, 120),
+    ref: host,
+    ua,
+    device,
+    utmSource: safeTag(v.utmSource),
+    utmMedium: safeTag(v.utmMedium),
+    utmCampaign: safeTag(v.utmCampaign),
+  };
   await write({
     ...data,
     total: data.total + 1,
     byDay: { ...data.byDay, [key]: (data.byDay[key] || 0) + 1 },
     refs: { ...data.refs, [host]: (data.refs[host] || 0) + 1 },
     devices: { ...data.devices, [device]: (data.devices[device] || 0) + 1 },
-    visits: [{ at: now, ...v }, ...data.visits].slice(0, 300),
+    visits: [visit, ...data.visits].slice(0, 300),
   });
 }
 
-// Catat klik sebuah link (buat "link paling sering diklik").
-export async function trackLinkClick(linkId: string, title: string): Promise<void> {
+// Catat aggregate + rincian tiap klik. Hanya simpan host dan UTM yang aman;
+// tidak menyimpan IP, referrer path, atau query penuh.
+export async function trackLinkClick(
+  linkId: string,
+  title: string,
+  attribution: { ref: string; ua: string; utmSource?: string; utmMedium?: string; utmCampaign?: string }
+): Promise<void> {
   if (!linkId) return;
   const data = await read();
+  const now = Date.now();
   const prev = data.linkClicks[linkId] || { title: title || linkId, count: 0 };
+  const event: LinkClickEvent = {
+    at: now,
+    linkId: linkId.slice(0, 80),
+    title: (title || prev.title || linkId).slice(0, 120),
+    ref: hostOf(attribution.ref),
+    device: deviceOf((attribution.ua || "").slice(0, 200)),
+    utmSource: safeTag(attribution.utmSource),
+    utmMedium: safeTag(attribution.utmMedium),
+    utmCampaign: safeTag(attribution.utmCampaign),
+  };
   await write({
     ...data,
     clicks: data.clicks + 1,
@@ -142,6 +197,7 @@ export async function trackLinkClick(linkId: string, title: string): Promise<voi
       ...data.linkClicks,
       [linkId]: { title: title || prev.title || linkId, count: prev.count + 1 },
     },
+    linkClickEvents: [event, ...data.linkClickEvents].slice(0, 500),
   });
 }
 
