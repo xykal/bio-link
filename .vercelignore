@@ -1,0 +1,9 @@
+# Local QA artifacts and local-only data must never ship with a deployment.
+admin-debug.png
+responsive-*.png
+data/
+.env*
+node_modules/
+.next/
+.vercel/
+.git/
