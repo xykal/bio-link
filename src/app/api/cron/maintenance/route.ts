@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { rateLimit, clientKey } from "@/lib/ratelimit";
+import { clientKey, sharedRateLimit } from "@/lib/ratelimit";
+import { safeEqual } from "@/lib/auth";
 import { runHousekeeping } from "@/lib/maintenance";
 import { readStore } from "@/lib/data";
 
@@ -9,22 +10,15 @@ export const dynamic = "force-dynamic";
 // jadwal 20:15 UTC = 03:15 WIB). Isi: hapus story kadaluarsa + media Cloudinary,
 // bersihkan analytics lama sesuai retensi, buang cache server, catat log.
 
-function authorized(req: Request, url: URL): boolean {
+function authorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET || "";
-  if (!secret) {
-    // Tanpa CRON_SECRET: aksi perawatan bersifat idempoten (hanya membersihkan
-    // hal yang memang kedaluwarsa), jadi dibuka dengan rate-limit ketat.
-    return true;
-  }
+  if (!secret) return process.env.NODE_ENV !== "production";
   const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  const key = url.searchParams.get("key") || "";
-  return bearer === secret || key === secret;
+  return Boolean(bearer) && safeEqual(bearer, secret);
 }
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-
-  const rl = rateLimit(`cron:${clientKey(req)}`, 3, 10 * 60_000);
+  const rl = await sharedRateLimit(`cron:${clientKey(req)}`, 3, 10 * 60_000);
   if (!rl.ok) {
     return NextResponse.json(
       { ok: false, error: "terlalu_sering" },
@@ -32,7 +26,7 @@ export async function GET(req: Request) {
     );
   }
 
-  if (!authorized(req, url)) {
+  if (!authorized(req)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 

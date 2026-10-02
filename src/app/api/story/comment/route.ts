@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { readStore, writeStore } from "@/lib/data";
 import { ensureVisitor, sanitizeVisitorId } from "@/lib/analytics";
-import { rateLimit, clientKey } from "@/lib/ratelimit";
+import { clientKey, sharedRateLimit } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +10,17 @@ export const dynamic = "force-dynamic";
 // (konsisten per pengunjung); komentar tampil melayang + di bottom sheet.
 // Rate limit 5 komentar / 10 menit / IP+visitor supaya tidak bisa di-spam.
 export async function POST(req: Request) {
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength > 4096) return NextResponse.json({ error: "Request terlalu besar" }, { status: 413 });
   const body = await req.json().catch(() => ({}));
   const visitorIdPre = sanitizeVisitorId(body.visitorId);
-  const rl = rateLimit(`comment:${clientKey(req, visitorIdPre)}`, 5, 10 * 60_000);
-  if (!rl.ok) {
+  const ipLimit = await sharedRateLimit(`comment-ip:${clientKey(req)}`, 30, 10 * 60_000);
+  const visitorLimit = await sharedRateLimit(`comment:${clientKey(req, visitorIdPre)}`, 5, 10 * 60_000);
+  if (!ipLimit.ok || !visitorLimit.ok) {
+    const retryAfterSec = Math.max(ipLimit.retryAfterSec, visitorLimit.retryAfterSec);
     return NextResponse.json(
       { error: "Kebanyakan komentar, coba lagi nanti" },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
     );
   }
   const storyId = String(body.storyId || "");

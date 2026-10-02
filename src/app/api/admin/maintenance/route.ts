@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, sameOriginRequest } from "@/lib/auth";
 import {
   getDiagnostics,
   flushServerCache,
@@ -27,6 +27,9 @@ export async function GET() {
 //   { action: "housekeeping" }       perawatan penuh (semua di atas + catat log)
 //   { action: "save-settings", autoEnabled?, retentionDays? }
 export async function POST(req: Request) {
+  if (!sameOriginRequest(req)) {
+    return NextResponse.json({ error: "Origin tidak diizinkan" }, { status: 403 });
+  }
   if (!(await isAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

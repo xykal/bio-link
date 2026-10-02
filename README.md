@@ -20,7 +20,7 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 - Footer branding "Made by XySpace Tch"
 
 **Panel Admin (`/admin`)**
-- Login **PIN angka (keypad)** — password default `0099`
+- Login **password/passphrase** (bukan keypad angka); default `0099` hanya untuk development lokal, tidak pernah dipakai otomatis di production
 - Menu **persisten di URL** (`/admin#link`, `/admin#story`, …) — refresh/back tidak balik ke awal; mobile pakai **drawer hamburger**, desktop pakai **sidebar**
 - Kelola profil: nama, handle, bio, **avatar upload (tanpa URL)**, banner, warna aksen
 - Kelola semua **sosial media**
@@ -31,14 +31,16 @@ Penyimpanan: **Cloudflare D1**. Upload image: **Cloudinary**.
 - Menu **Perawatan**: status server (ping D1, ukuran store, cache, runtime), **bersihkan cache** server/browser, rawat server (hapus story kadaluwarsa + analytics lama), dan **perawatan berkala otomatis** via Vercel Cron (03:15 WIB)
 
 ## 🔐 Login Admin
-- Buka `https://domain-mu/admin`
-- Masukkan PIN (default `0099` — ubah lewat env `ADMIN_PASSWORD`)
-- Input hanya angka, ala PIN/keypad → aman dari tebakan
+- Buka `https://domain-mu/admin` dan masukkan password/passphrase admin.
+- `ADMIN_PASSWORD` wajib diatur di production. Nilai `0099` hanya fallback development lokal dan tidak dapat digunakan untuk login production.
+- Gunakan passphrase unik yang panjang; ganti password melalui pengaturan environment deployment.
 
 ## 🔒 Keamanan sesi admin
-- Cookie sesi **ditandatangani HMAC** (`SESSION_SECRET`) + masa berlaku 7 hari — tidak bisa dipalsukan hanya dengan tahu nama cookie.
-- Perbandingan PIN **constant-time**, login di-rate-limit (10 percobaan / 10 menit / IP).
-- API story publik **di-rate-limit** (komentar 5/10 mnt, like 15/10 mnt, view 60/10 mnt per IP+visitor).
+- Cookie sesi **ditandatangani HMAC** (`SESSION_SECRET`) + masa berlaku 7 hari. `SESSION_SECRET` wajib ada di production; bila belum dikonfigurasi, login ditolak (fail-closed).
+- Perbandingan password **constant-time**; login dibatasi 10 percobaan per 10 menit per IP.
+- Mutasi admin memeriksa sesi dan origin same-site untuk mengurangi risiko CSRF.
+- Rate limit cerita, klik/kunjungan publik, login, dan cron memakai D1 bersama saat tersedia; mode development memakai fallback memory yang dibatasi.
+- URL link hanya mengizinkan `http`, `https`, `mailto`, `tel`, dan `sms`; protokol berbahaya seperti `javascript:` ditolak.
 - `/api/upload` wajib sesi admin, folder Cloudinary di-whitelist, gambar maks 4 MB.
 - Gate grup/saluran memakai widget resmi `gate.js` dari `rules.xyc.my.id` (Shadow DOM, wajib scroll & setuju). Modal lokal hanya fallback bila widget gagal dimuat — tidak pakai iframe karena origin rules mengirim `X-Frame-Options: SAMEORIGIN`.
 
@@ -48,46 +50,50 @@ Menu **Perawatan** (`/admin#perawatan`) merawat hosting/server tanpa buka dashbo
 
 | Blok | Isi |
 |---|---|
-| **Status Server** | Ping latency D1, ukuran store & analytics, kondisi cache, runtime Node, ceklist env (SESSION_SECRET, CRON_SECRET, PIN masih default?) |
+| **Status Server** | Ping latency D1, ukuran store & analytics, kondisi cache, runtime Node, serta status SESSION_SECRET, CRON_SECRET, dan ADMIN_PASSWORD |
 | **Bersihkan Cache** | Micro-cache server D1 (TTL 10 dtk, otomatis dibuang saat ada perubahan) + cache browser perangkat (identitas visitor `bio_*`) |
 | **Rawat Server** | Hapus story kadaluwarsa (media Cloudinary ikut di-destroy), bersihkan analytics lama sesuai retensi, atau **rawat penuh** sekali klik |
 | **Perawatan Berkala Otomatis** | Vercel Cron (`vercel.json`, 20:15 UTC = 03:15 WIB) menjalankan rawat penuh harian; bisa dimatikan sementara & atur retensi (7–365 hari) dari panel |
 | **Riwayat Perawatan** | 30 catatan terakhir (manual/otomatis) beserta hasilnya |
 
-Endpoint cron: `GET /api/cron/maintenance` — kalau env `CRON_SECRET` diisi, wajib `Authorization: Bearer <secret>` atau `?key=<secret>`; kalau kosong tetap rate-limited (3/10 mnt) dan hanya membersihkan data yang memang kedaluwarsa.
+Endpoint cron: `GET /api/cron/maintenance` memakai `Authorization: Bearer <CRON_SECRET>`. Di production, endpoint ditutup bila `CRON_SECRET` belum diatur; query-string secret tidak diterima. Tetap dibatasi 3 request per 10 menit.
 
 ## 📦 Setup
 
 ```bash
-npm install
+npm ci
+cp .env.example .env.local  # isi hanya layanan yang dipakai; jangan commit nilai asli
 npm run dev
 ```
 
-Tes manual (butuh server jalan di port 3111 + browser Playwright sekali install):
+Tes browser (server harus berjalan di port 3111; instal Chromium sekali):
 
 ```bash
-npm run build && npx next start -p 3111
-npx playwright install chromium   # sekali saja
-npm test                          # tes r15: leak audio story + progres voice note
+npx playwright install chromium
+npm run test:responsive          # 320, 360, 390, 430, 768, 1024, 1440px + tambah/edit link
+npm test                         # tes manual r15: perpindahan story & voice note
 ```
 
 ### Environment variables
 | Var | Keterangan |
 |---|---|
-| `ADMIN_PASSWORD` | PIN admin (default `0099` — **ganti!** ) |
-| `SESSION_SECRET` | Rahasia tanda tangan cookie sesi (opsional, sangat disarankan) |
+| `ADMIN_PASSWORD` | Password/passphrase admin; wajib di production (tidak ada default production) |
+| `SESSION_SECRET` | Rahasia acak untuk HMAC sesi; wajib di production (minimal 32 byte acak) |
+| `CRON_SECRET` | Rahasia acak terpisah untuk otorisasi Vercel Cron; wajib di production |
 | `CLOUDFLARE_ACCOUNT_ID` | ID akun Cloudflare |
 | `CLOUDFLARE_D1_DATABASE_ID` | ID database D1 |
-| `CLOUDFLARE_API_TOKEN` | API token Cloudflare (izin D1) |
+| `CLOUDFLARE_API_TOKEN` | API token Cloudflare dengan izin D1 yang dibutuhkan |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
 
-> Tanpa env D1 → otomatis pakai file lokal `data/store.json` (untuk dev).
+> Tanpa env D1 → otomatis pakai file lokal `data/store.json` untuk development.
+> Rate-limit bersama memakai tabel D1 `api_rate_limits` yang dibuat otomatis; tanpa D1, fallback hanya berlaku per instance.
 > Tanpa env Cloudinary → tombol upload nonaktif, tapi URL manual tetap bisa.
 
 ## ☁️ Deploy
 - Vercel project `bio-link` + custom domain `bio.haekal.web.id` (DNS Cloudflare) sudah terpasang.
+- Pastikan `ADMIN_PASSWORD`, `SESSION_SECRET`, dan `CRON_SECRET` tersedia sebagai environment variables Production sebelum deploy. Login production sengaja fail-closed jika password atau session secret hilang.
 - Deploy: `npx vercel --prod` atau connect repo ke Vercel.
 
 ## 🗄️ Storage: Cloudflare D1
@@ -106,11 +112,11 @@ src/
 │       └── admin/               # profile / links / settings CRUD
 ├── components/
 │   ├── BioPage.tsx              # halaman publik (theme, gate, fonts, branding)
-│   ├── AdminPanel.tsx           # dashboard admin (PIN, settings)
+│   ├── AdminPanel.tsx           # dashboard admin (password, links/settings)
 │   ├── FontLoader.tsx           # injeksi Google Fonts runtime
 │   └── Icons.tsx                # ikon SVG
 └── lib/
     ├── data.ts                  # storage (Cloudflare D1 / file fallback)
-    ├── auth.ts                  # PIN auth + session cookie
+    ├── auth.ts                  # password auth, same-origin checks, session cookie
     └── fonts.ts                 # curated font set + google fonts builder
 ```

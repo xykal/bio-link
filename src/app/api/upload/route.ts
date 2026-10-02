@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, sameOriginRequest } from "@/lib/auth";
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
 const API_KEY = process.env.CLOUDINARY_API_KEY || "";
@@ -20,6 +20,9 @@ const ALLOWED_FOLDERS = new Set([
 const MAX_BYTES = 4 * 1024 * 1024; // 4 MB — cukup buat avatar/banner/OG
 
 export async function POST(req: Request) {
+  if (!sameOriginRequest(req)) {
+    return NextResponse.json({ error: "Origin tidak diizinkan" }, { status: 403 });
+  }
   // Bug sebelumnya: isAuthenticated() dipanggil TANPA await. Promise itu truthy,
   // jadi `!isAuthenticated()` selalu false dan rute ini terbuka untuk siapa pun —
   // terbukti di production: request tanpa cookie tetap lolos ke Cloudinary.

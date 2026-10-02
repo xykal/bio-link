@@ -25,7 +25,10 @@ const getStore = cache(async () => {
 // Warna chrome browser (mobile) mengikuti mode tema.
 export async function generateViewport(): Promise<Viewport> {
   const store = await getStore();
-  return { themeColor: store?.theme === "light" ? "#f7f7f9" : "#08080d" };
+  return {
+    themeColor: store?.theme === "light" ? "#f7f7f9" : "#08080d",
+    viewportFit: "cover",
+  };
 }
 
 export async function generateMetadata(): Promise<Metadata> {

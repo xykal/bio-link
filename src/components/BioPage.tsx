@@ -610,10 +610,14 @@ export default function BioPage({ initial }: { initial: Store | null }) {
 
   return (
     <main
-      className={`bio-page relative flex min-h-screen w-full flex-col items-center justify-center overflow-x-hidden px-4 py-6 transition-colors ${
+      className={`bio-page relative flex min-h-dvh w-full flex-col items-center justify-center overflow-x-hidden px-4 py-6 transition-colors ${
         isLight ? "bg-[#f7f7f9] text-zinc-900" : "text-white"
       }`}
-      style={cssVars}
+      style={{
+        ...cssVars,
+        paddingTop: "max(1.5rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
+      }}
     >
       {!isLight && (
         <div
@@ -808,22 +812,18 @@ export default function BioPage({ initial }: { initial: Store | null }) {
             </p>
           )}
 
-          {/* STACK / KEAHLIAN: logo asli (warna brand), posisi bisa kiri/tengah/kanan, tumpuk-tindih setengah */}
+          {/* Stack wraps into rows instead of compressing logos on narrow screens. */}
           {sections.stack && stack.length > 0 && (
             <div className={`mt-5 flex w-full items-center ${stackJustify}`} aria-label="Tech stack">
-              <div className="flex">
-                {stack.map((s, i) => {
+              <div className={`flex w-full flex-wrap gap-2 ${stackJustify}`}>
+                {stack.map((s) => {
                   if (!s.path) return null;
                   return (
                     <span
                       key={s.id}
                       title={s.title || s.slug}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md"
-                      style={{
-                        marginLeft: i === 0 ? 0 : -16,
-                        zIndex: stack.length - i,
-                        border: `2px solid ${ringColor}`,
-                      }}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-md"
+                      style={{ border: `2px solid ${ringColor}` }}
                     >
                       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden>
                         <path d={s.path} fill={`#${s.hex}`} />
@@ -1089,9 +1089,16 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           )}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
 
-          <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="relative z-10 px-4"
+            style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="relative">
-              <div className="h-72 w-72 overflow-hidden rounded-full bg-black/40 shadow-2xl">
+              <div
+                className="aspect-square overflow-hidden rounded-full bg-black/40 shadow-2xl"
+                style={{ width: "min(18rem, calc(100vw - 2rem))" }}
+              >
                 {profile?.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

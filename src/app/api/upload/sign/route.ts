@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, sameOriginRequest } from "@/lib/auth";
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
 const API_KEY = process.env.CLOUDINARY_API_KEY || "";
@@ -19,6 +19,9 @@ const ALLOWED_FOLDERS = new Set([
 // Ini penting untuk video: file besar tak lewat function (hindari limit body
 // serverless ~4.5MB di Vercel). Rahasia tetap di server, hanya signature turun.
 export async function POST(req: Request) {
+  if (!sameOriginRequest(req)) {
+    return NextResponse.json({ error: "Origin tidak diizinkan" }, { status: 403 });
+  }
   if (!(await isAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

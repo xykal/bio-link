@@ -2,6 +2,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto, { randomUUID } from "crypto";
 import { getTechIcon } from "./stackIcons";
+import { isAllowedLinkUrl } from "./links";
+import { d1Query, useD1 } from "./d1";
 import { cacheGet, cacheSet, cacheInvalidate } from "./storecache";
 
 export type LinkItem = {
@@ -276,11 +278,6 @@ export type Store = {
 // ---------------------------------------------------------------------------
 //  Cloudflare D1 (REST API) or local file fallback
 // ---------------------------------------------------------------------------
-const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "";
-const CF_DB = process.env.CLOUDFLARE_D1_DATABASE_ID || "";
-const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "";
-const useD1 = Boolean(CF_ACCOUNT && CF_DB && CF_TOKEN);
-
 const TABLE = "store";
 const ROW_ID = 1;
 
@@ -422,20 +419,23 @@ export function normalize(parsed: Partial<Store>): Store {
           : "",
     },
     links: Array.isArray(parsed.links)
-      ? parsed.links.map((l) => ({
-          id: l.id || randomUUID(),
-          title: l.title ?? "",
-          url: l.url ?? "",
-          icon: l.icon || "link",
-          order: typeof l.order === "number" ? l.order : 0,
-          enabled: l.enabled !== false,
-          gate: l.gate === "rules" ? "rules" : l.gate === "none" ? "none" : "none",
-          kind: (["link", "join_group", "channel"] as NonNullable<LinkItem["kind"]>[]).includes(
-            l.kind as NonNullable<LinkItem["kind"]>
-          )
-            ? (l.kind as NonNullable<LinkItem["kind"]>)
-            : "link",
-        }))
+      ? parsed.links
+          .filter((link) => link && typeof link.title === "string" && isAllowedLinkUrl(link.url))
+          .slice(0, 100)
+          .map((l) => ({
+            id: typeof l.id === "string" && l.id ? l.id.slice(0, 80) : randomUUID(),
+            title: l.title.trim().slice(0, 120),
+            url: l.url.trim(),
+            icon: typeof l.icon === "string" && l.icon.length <= 40 ? l.icon : "link",
+            order: typeof l.order === "number" ? l.order : 0,
+            enabled: l.enabled !== false,
+            gate: l.gate === "rules" ? "rules" : "none",
+            kind: (["link", "join_group", "channel"] as NonNullable<LinkItem["kind"]>[]).includes(
+              l.kind as NonNullable<LinkItem["kind"]>
+            )
+              ? (l.kind as NonNullable<LinkItem["kind"]>)
+              : "link",
+          }))
       : [...d.links],
     social: { ...d.social, ...(parsed.social || {}) },
     stack: Array.isArray(parsed.stack)
@@ -595,35 +595,8 @@ export function normalize(parsed: Partial<Store>): Store {
 // ---------------------------------------------------------------------------
 //  Cloudflare D1
 // ---------------------------------------------------------------------------
-type D1ResultSet = { results?: Array<Record<string, unknown>> };
-async function d1QueryOnce(sql: string): Promise<D1ResultSet[]> {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/d1/database/${CF_DB}/query`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ sql }),
-  });
-  const json = await res.json();
-  if (!json.success) throw new Error(`D1 error: ${JSON.stringify(json.errors || json)}`);
-  return json.result;
-}
-// D1 kadang balik "internal error" sesaat (blip Cloudflare). Retry beberapa kali
-// biar halaman gak 500 cuma karena gangguan sepersekian detik.
-async function d1Query(sql: string): Promise<D1ResultSet[]> {
-  let lastErr: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await d1QueryOnce(sql);
-    } catch (e) {
-      lastErr = e;
-      await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-}
-
 async function d1Read(): Promise<Store> {
-  const rows = await d1Query(`SELECT data FROM ${TABLE} WHERE id = ${ROW_ID}`);
+  const rows = await d1Query(`SELECT data FROM ${TABLE} WHERE id = ?`, [ROW_ID]);
   const first = rows?.[0]?.results?.[0] as { data?: string } | undefined;
   if (!first?.data) {
     const store = normalize({});
@@ -634,10 +607,11 @@ async function d1Read(): Promise<Store> {
 }
 
 async function d1Write(store: Store): Promise<void> {
-  const data = JSON.stringify(store).replace(/'/g, "''");
+  const data = JSON.stringify(store);
   await d1Query(
-    `INSERT INTO ${TABLE} (id, data) VALUES (${ROW_ID}, '${data}')
-     ON CONFLICT(id) DO UPDATE SET data = excluded.data;`
+    `INSERT INTO ${TABLE} (id, data) VALUES (?, ?)
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
+    [ROW_ID, data]
   );
 }
 

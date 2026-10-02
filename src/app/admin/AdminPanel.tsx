@@ -249,6 +249,19 @@ const FONT_TARGETS: { key: keyof FontsConfig; label: string }[] = [
   { key: "brand", label: "Branding" },
 ];
 
+type LinkDraft = Pick<LinkItem, "title" | "url" | "icon"> & {
+  gate: NonNullable<LinkItem["gate"]>;
+  kind: NonNullable<LinkItem["kind"]>;
+};
+
+const EMPTY_LINK_FORM: LinkDraft = {
+  title: "",
+  url: "",
+  icon: "link",
+  gate: "rules",
+  kind: "link",
+};
+
 const SOCIAL_PLATFORMS: { key: keyof Socials; label: string; icon: string }[] = [
   { key: "instagram", label: "Instagram", icon: "instagram" },
   { key: "tiktok", label: "TikTok", icon: "tiktok" },
@@ -266,7 +279,7 @@ const SOCIAL_PLATFORMS: { key: keyof Socials; label: string; icon: string }[] = 
 
 export default function AdminPanel() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [pin, setPin] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -308,15 +321,10 @@ export default function AdminPanel() {
   const [branding, setBranding] = useState<Branding | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  // link editor
+  // Link editor supports add and edit with the same validated form.
   const [editing, setEditing] = useState(false);
-  const [linkForm, setLinkForm] = useState({
-    title: "",
-    url: "",
-    icon: "link",
-    gate: "rules",
-    kind: "link",
-  });
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [linkForm, setLinkForm] = useState<LinkDraft>(EMPTY_LINK_FORM);
   const [saveBusy, setSaveBusy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -619,37 +627,30 @@ export default function AdminPanel() {
   async function doLogin(password: string) {
     setBusy(true);
     setLoginError("");
-    const r = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    setBusy(false);
-    if (r.ok) {
-      setAuthed(true);
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setLoginError(d.error || "PIN salah");
-      setPin("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (response.ok) {
+        setAuthed(true);
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      setLoginError(data.error || "Password salah");
+      setAdminPassword("");
+    } catch {
+      setLoginError("Koneksi gagal. Coba lagi.");
+    } finally {
+      setBusy(false);
     }
   }
-
-  function pushDigit(d: string) {
-    setPin((p) => (p.length < 6 ? p + d : p));
-  }
-
-  // PIN 4 digit langsung masuk tanpa pencet tombol.
-  useEffect(() => {
-    if (authed || pin.length !== 4 || busy) return;
-    const t = setTimeout(() => void doLogin(pin), 0);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setAuthed(false);
-    setPin("");
+    setAdminPassword("");
   }
 
   async function saveProfile() {
@@ -710,38 +711,89 @@ export default function AdminPanel() {
   }
 
   // ---- links ----
-  async function addLink(e: React.FormEvent) {
-    e.preventDefault();
-    if (!linkForm.title.trim() || !linkForm.url.trim()) return;
-    setSaveBusy(true);
-    const r = await fetch("/api/admin/links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(linkForm),
-    });
-    if (r.ok) {
-      const item = await r.json();
-      setStore({ ...store!, links: [...store!.links, item] });
-      setLinkForm({ title: "", url: "", icon: "link", gate: "rules", kind: "link" });
-      setEditing(false);
-      flash("Link ditambahkan");
-    } else {
-      flash("Gagal menambah link", false);
-    }
-    setSaveBusy(false);
+  function openNewLink() {
+    setEditingLinkId(null);
+    setLinkForm(EMPTY_LINK_FORM);
+    setEditing(true);
   }
 
-  async function updateLink(id: string, patch: Partial<LinkItem>) {
-    const r = await fetch(`/api/admin/links/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+  function openEditLink(link: LinkItem) {
+    setEditingLinkId(link.id);
+    setLinkForm({
+      title: link.title || "",
+      url: link.url || "",
+      icon: link.icon || "link",
+      gate: link.gate || "none",
+      kind: link.kind || "link",
     });
-    if (r.ok) {
-      const updated = await r.json();
-      setStore({ ...store!, links: store!.links.map((l) => (l.id === id ? updated : l)) });
-    } else {
-      flash("Gagal mengubah link", false);
+    setEditing(true);
+    window.setTimeout(() => {
+      document.getElementById("link-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  }
+
+  function closeLinkEditor() {
+    setEditing(false);
+    setEditingLinkId(null);
+    setLinkForm(EMPTY_LINK_FORM);
+  }
+
+  async function saveLink(e: React.FormEvent) {
+    e.preventDefault();
+    const draft = { ...linkForm, title: linkForm.title.trim(), url: linkForm.url.trim() };
+    if (!draft.title || !draft.url) {
+      flash("Judul dan URL wajib diisi", false);
+      return;
+    }
+
+    setSaveBusy(true);
+    try {
+      if (editingLinkId) {
+        const saved = await updateLink(editingLinkId, draft);
+        if (saved) {
+          closeLinkEditor();
+          flash("Link diperbarui");
+        }
+        return;
+      }
+
+      const response = await fetch("/api/admin/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Gagal menambah link");
+      setStore((current) => current ? { ...current, links: [...current.links, data as LinkItem] } : current);
+      closeLinkEditor();
+      flash("Link ditambahkan");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Gagal menyimpan link", false);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function updateLink(id: string, patch: Partial<LinkItem>): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/admin/links/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        flash(data.error || "Gagal mengubah link", false);
+        return false;
+      }
+      const updated = data as LinkItem;
+      setStore((current) => current
+        ? { ...current, links: current.links.map((link) => link.id === id ? updated : link) }
+        : current);
+      return true;
+    } catch {
+      flash("Koneksi gagal saat mengubah link", false);
+      return false;
     }
   }
 
@@ -961,96 +1013,59 @@ export default function AdminPanel() {
 
   if (authed === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+      <div className="flex min-h-dvh items-center justify-center bg-[#0a0a0f]">
         <Spinner />
       </div>
     );
   }
 
-  // ============ LOGIN (PIN) ============
+  // ============ LOGIN ============
   if (!authed) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4">
+      <main className="flex min-h-dvh items-center justify-center bg-[#0a0a0f] px-4 py-8">
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (pin.length >= 4) void doLogin(pin);
+            if (!busy && adminPassword.length >= 4) void doLogin(adminPassword);
           }}
-          className="relative w-full max-w-[340px] rounded-3xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-md"
+          className="relative w-full max-w-[380px] rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md sm:p-8"
         >
           <div className="mb-6 flex flex-col items-center text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
               <Icon name="lock" className="h-7 w-7" />
             </div>
             <h1 className="mt-4 text-xl font-bold text-white">Panel Admin</h1>
-            <p className="mt-1 text-sm text-white/50">Masukkan PIN untuk masuk</p>
+            <p className="mt-1 text-sm text-white/50">Masukkan password admin</p>
           </div>
 
-          {/* PIN dots */}
-          <div className="mb-5 flex justify-center gap-3">
-            {[0, 1, 2, 3].map((i) => (
-              <span
-                key={i}
-                className={`h-3.5 w-3.5 rounded-full transition ${
-                  pin.length > i ? "bg-violet-400" : "bg-white/15"
-                }`}
-              />
-            ))}
-          </div>
+          <label htmlFor="admin-password" className="text-xs font-medium uppercase tracking-wider text-white/45">
+            Password
+          </label>
+          <input
+            id="admin-password"
+            type="password"
+            autoComplete="current-password"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+            minLength={4}
+            maxLength={256}
+            value={adminPassword}
+            onChange={(e) => setAdminPassword(e.target.value)}
+            className={inputCls + " mt-1.5"}
+            placeholder="Gunakan passphrase yang kuat"
+          />
           {loginError && (
-            <p className="mb-3 flex items-center justify-center gap-2 text-center text-sm text-rose-400">
-              <Icon name="alert" className="h-4 w-4" />
+            <p className="mt-3 flex items-center gap-2 text-sm text-rose-400" role="alert">
+              <Icon name="alert" className="h-4 w-4 shrink-0" />
               {loginError}
             </p>
           )}
 
-          {/* numeric keypad */}
-          <div className="grid grid-cols-3 gap-2.5">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => pushDigit(n)}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-xl font-semibold text-white transition hover:bg-white/[0.08] active:scale-95"
-              >
-                {n}
-              </button>
-            ))}
-            <div />
-            <button
-              type="button"
-              onClick={() => pushDigit("0")}
-              className="rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-xl font-semibold text-white transition hover:bg-white/[0.08] active:scale-95"
-            >
-              0
-            </button>
-            <button
-              type="button"
-              onClick={() => setPin((p) => p.slice(0, -1))}
-              className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] py-4 text-white/60 transition hover:bg-white/[0.08] active:scale-95"
-              aria-label="Hapus digit"
-            >
-              <Icon name="delete" className="h-5 w-5" />
-            </button>
-          </div>
-
-          {busy && (
-            <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50">
-              <Spinner small /> Memverifikasi…
-            </p>
-          )}
-
-          {/* tombol masuk kecil di pojok kanan bawah (fallback PIN > 4 digit) */}
-          <div className="mt-5 flex justify-end">
-            <button
-              type="submit"
-              disabled={busy || pin.length < 4}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 transition hover:text-white disabled:opacity-30"
-            >
-              Masuk
-            </button>
-          </div>
-          <p className="mt-4 text-center text-xs text-white/25">Akses dibatasi · pemilik saja</p>
+          <button type="submit" disabled={busy || adminPassword.length < 4} className={btnCls + " mt-5 w-full"}>
+            {busy ? <span className="flex items-center justify-center gap-2"><Spinner small /> Memverifikasi…</span> : "Masuk"}
+          </button>
+          <p className="mt-4 text-center text-xs text-white/30">Akses dibatasi · pemilik saja</p>
         </form>
       </main>
     );
@@ -1058,7 +1073,7 @@ export default function AdminPanel() {
 
   if (loadError && !store) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4">
+      <main className="flex min-h-dvh items-center justify-center bg-[#0a0a0f] px-4">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-400">
             <Icon name="alert" className="h-7 w-7" />
@@ -1077,7 +1092,7 @@ export default function AdminPanel() {
 
   if (!store) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+      <div className="flex min-h-dvh items-center justify-center bg-[#0a0a0f]">
         <Spinner />
       </div>
     );
@@ -1085,8 +1100,11 @@ export default function AdminPanel() {
 
   // ============ DASHBOARD ============
   return (
-    <main className="min-h-screen bg-[#0a0a0f]">
-      <header className="sticky top-0 z-10 border-b border-white/5 bg-black/40 backdrop-blur-xl">
+    <main className="min-h-dvh bg-[#0a0a0f]">
+      <header
+        className="sticky top-0 z-10 border-b border-white/5 bg-black/40 backdrop-blur-xl"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-2 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
@@ -1108,9 +1126,12 @@ export default function AdminPanel() {
             <a
               href="/"
               target="_blank"
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+              rel="noreferrer"
+              aria-label="Lihat halaman publik"
+              className="flex min-h-10 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 text-sm text-white/70 transition hover:text-white sm:px-3"
             >
-              Lihat halaman <Icon name="external" className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Lihat halaman</span>
+              <Icon name="external" className="h-3.5 w-3.5" />
             </a>
             <button
               onClick={handleLogout}
@@ -1130,7 +1151,10 @@ export default function AdminPanel() {
             onClick={() => setNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-[#0d0d14] shadow-2xl">
+          <div
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-[#0d0d14] shadow-2xl"
+            style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3.5">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
@@ -1532,64 +1556,52 @@ export default function AdminPanel() {
         </Section>
 
         {/* LINKS */}
-        <Section title="Link" sub="Daftar tombol di halaman bio" right={<span className="text-sm text-white/40">{store.links.length} link</span>}>
-          {store.links.length === 0 && !editing ? (
-            <EmptyState
-              icon="inbox"
-              title="Belum ada link"
-              sub="Tambahkan link pertama biar halaman tidak kosong."
-              actionLabel="Tambah Link"
-              onAction={() => setEditing(true)}
-            />
-          ) : (
-            <div className="space-y-2">
-              {store.links.map((l, i) => (
-                <div key={l.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/70">
-                    <Icon name={l.icon} className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className={`truncate font-medium text-white ${!l.enabled ? "line-through opacity-50" : ""}`}>{l.title}</p>
-                    <p className="truncate text-xs text-white/40">
-                      {l.url}
-                      {l.kind && l.kind !== "link" && <span className="ml-1 text-[10px] uppercase text-violet-300">· {l.kind}</span>}
-                      {l.gate === "rules" && (
-                        <span className="ml-1 inline-flex items-center gap-1 text-[10px] uppercase text-amber-300">
-                          · <Icon name="lock" className="h-3 w-3" /> gate
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <IconBtn onClick={() => move(l.id, -1)} disabled={i === 0} title="Naik"><MoveUpIcon /></IconBtn>
-                  <IconBtn onClick={() => move(l.id, 1)} disabled={i === store.links.length - 1} title="Turun"><MoveDownIcon /></IconBtn>
-                  <IconBtn onClick={() => updateLink(l.id, { enabled: !l.enabled })} title={l.enabled ? "Sembunyikan" : "Tampilkan"} color={l.enabled ? "text-emerald-400" : "text-white/30"}><EyeIcon /></IconBtn>
-                  <IconBtn onClick={() => deleteLink(l.id)} title="Hapus" color="text-rose-400/70"><TrashIcon /></IconBtn>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!editing ? (
-            store.links.length > 0 && (
-              <button onClick={() => setEditing(true)} className="mt-4 w-full rounded-2xl border border-dashed border-white/15 py-3 font-medium text-white/60 transition hover:border-white/30 hover:text-white">
-                + Tambah Link
-              </button>
-            )
-          ) : (
-            <form onSubmit={addLink} className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <Section
+          title="Link"
+          sub="Tambah, edit, urutkan, atau sembunyikan link di halaman bio."
+          right={<span className="text-sm text-white/40">{store.links.length} link</span>}
+        >
+          {editing && (
+            <form
+              id="link-editor"
+              onSubmit={saveLink}
+              className="mb-4 space-y-4 rounded-2xl border border-violet-400/25 bg-violet-500/[0.06] p-3 sm:p-4"
+            >
+              <div>
+                <h3 className="font-semibold text-white">{editingLinkId ? "Edit link" : "Tambah link"}</h3>
+                <p className="mt-1 text-xs text-white/40">Perubahan langsung tersimpan di halaman publik.</p>
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Judul">
-                  <input className={inputCls} value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} placeholder="Mis. Join Group" autoFocus />
+                  <input
+                    className={inputCls}
+                    value={linkForm.title}
+                    onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })}
+                    placeholder="Mis. Portofolio"
+                    maxLength={120}
+                    required
+                    autoFocus
+                  />
                 </Field>
-                <Field label="URL">
-                  <input className={inputCls} value={linkForm.url} onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })} placeholder="https://…" />
+                <Field label="URL" hint="Contoh: https://…, mailto:…, atau tel:…">
+                  <input
+                    className={inputCls}
+                    value={linkForm.url}
+                    onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })}
+                    placeholder="https://…"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    maxLength={2048}
+                    required
+                  />
                 </Field>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Tipe">
                   <Dropdown
                     value={linkForm.kind}
-                    onChange={(v) => setLinkForm({ ...linkForm, kind: v as typeof linkForm.kind })}
+                    onChange={(value) => setLinkForm({ ...linkForm, kind: value as LinkDraft["kind"] })}
                     options={[
                       { value: "link", label: "Link biasa" },
                       { value: "join_group", label: "Join Grup" },
@@ -1600,7 +1612,7 @@ export default function AdminPanel() {
                 <Field label="Gate (wajib baca rules)">
                   <Dropdown
                     value={linkForm.gate}
-                    onChange={(v) => setLinkForm({ ...linkForm, gate: v as typeof linkForm.gate })}
+                    onChange={(value) => setLinkForm({ ...linkForm, gate: value as LinkDraft["gate"] })}
                     options={[
                       { value: "rules", label: "Aktifkan gate" },
                       { value: "none", label: "Tanpa gate" },
@@ -1610,20 +1622,86 @@ export default function AdminPanel() {
               </div>
               <Field label="Ikon">
                 <div className="flex flex-wrap gap-2">
-                  {ICON_KEYS.map((k) => (
-                    <button key={k} type="button" onClick={() => setLinkForm({ ...linkForm, icon: k })}
-                      className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${linkForm.icon === k ? "border-violet-400/60 bg-violet-500/20 text-white" : "border-white/10 bg-white/5 text-white/50 hover:text-white"}`}
-                      title={k}>
-                      <Icon name={k} className="h-4 w-4" />
+                  {ICON_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setLinkForm({ ...linkForm, icon: key })}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${linkForm.icon === key ? "border-violet-400/60 bg-violet-500/20 text-white" : "border-white/10 bg-white/5 text-white/50 hover:text-white"}`}
+                      title={key}
+                      aria-label={`Pilih ikon ${key}`}
+                      aria-pressed={linkForm.icon === key}
+                    >
+                      <Icon name={key} className="h-4 w-4" />
                     </button>
                   ))}
                 </div>
               </Field>
-              <div className="flex gap-2">
-                <button type="submit" disabled={saveBusy} className={btnCls}>{saveBusy ? "Menyimpan…" : "Simpan"}</button>
-                <button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-medium text-white/60 transition hover:text-white">Batal</button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                <button type="button" onClick={closeLinkEditor} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-medium text-white/60 transition hover:text-white sm:w-auto">
+                  Batal
+                </button>
+                <button type="submit" disabled={saveBusy} className={btnCls + " w-full sm:w-auto"}>
+                  {saveBusy ? "Menyimpan…" : editingLinkId ? "Simpan perubahan" : "Tambah link"}
+                </button>
               </div>
             </form>
+          )}
+
+          {store.links.length === 0 && !editing ? (
+            <EmptyState
+              icon="inbox"
+              title="Belum ada link"
+              sub="Tambahkan link pertama biar halaman tidak kosong."
+              actionLabel="Tambah Link"
+              onAction={openNewLink}
+            />
+          ) : (
+            <div className="space-y-2">
+              {store.links.map((link, index) => (
+                <div
+                  key={link.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3 sm:flex-row sm:items-center"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-white/70">
+                      <Icon name={link.icon} className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate font-medium text-white ${!link.enabled ? "line-through opacity-50" : ""}`}>
+                        {link.title}
+                      </p>
+                      <p className="truncate text-xs text-white/40">
+                        {link.url}
+                        {link.kind && link.kind !== "link" && <span className="ml-1 text-[10px] uppercase text-violet-300">· {link.kind}</span>}
+                        {link.gate === "rules" && (
+                          <span className="ml-1 inline-flex items-center gap-1 text-[10px] uppercase text-amber-300">
+                            · <Icon name="lock" className="h-3 w-3" /> gate
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid w-full grid-cols-5 gap-1 sm:flex sm:w-auto sm:shrink-0">
+                    <IconBtn className="w-full sm:w-10" onClick={() => move(link.id, -1)} disabled={index === 0} title="Naik"><MoveUpIcon /></IconBtn>
+                    <IconBtn className="w-full sm:w-10" onClick={() => move(link.id, 1)} disabled={index === store.links.length - 1} title="Turun"><MoveDownIcon /></IconBtn>
+                    <IconBtn className="w-full sm:w-10" onClick={() => openEditLink(link)} title={`Edit ${link.title}`} color="text-violet-300"><EditIcon /></IconBtn>
+                    <IconBtn className="w-full sm:w-10" onClick={() => updateLink(link.id, { enabled: !link.enabled })} title={link.enabled ? "Sembunyikan" : "Tampilkan"} color={link.enabled ? "text-emerald-400" : "text-white/30"}><EyeIcon /></IconBtn>
+                    <IconBtn className="w-full sm:w-10" onClick={() => deleteLink(link.id)} title="Hapus" color="text-rose-400/70"><TrashIcon /></IconBtn>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!editing && (
+            <button
+              type="button"
+              onClick={openNewLink}
+              className="mt-4 min-h-11 w-full rounded-2xl border border-dashed border-white/15 py-3 font-medium text-white/60 transition hover:border-white/30 hover:text-white"
+            >
+              + Tambah Link
+            </button>
           )}
         </Section>
 
@@ -1864,28 +1942,28 @@ export default function AdminPanel() {
           title="Story"
           sub="Story muncul di ring foto profil. Klik foto profil di halaman bio untuk menonton (full screen, bisa like & komen)."
           right={
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => addStory("image")}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white/70 transition hover:text-white sm:px-3"
               >
                 + Foto
               </button>
               <button
                 onClick={() => addStory("text")}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white/70 transition hover:text-white sm:px-3"
               >
                 + Teks
               </button>
               <button
                 onClick={() => addStory("video")}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white/70 transition hover:text-white sm:px-3"
               >
                 + Video
               </button>
               <button
                 onClick={() => addStory("audio")}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition hover:text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white/70 transition hover:text-white sm:px-3"
               >
                 + Voice note
               </button>
@@ -2467,14 +2545,14 @@ export default function AdminPanel() {
               <MaintStat
                 ok={maint.env.sessionSecret}
                 label="Session secret"
-                value={maint.env.sessionSecret ? "Terpasang" : "Default turunan PIN"}
-                sub="Tanda tangan cookie admin"
+                value={maint.env.sessionSecret ? "Terpasang" : "Belum dipasang"}
+                sub="Wajib di production untuk tanda tangan sesi"
               />
               <MaintStat
                 ok={!maint.env.adminPasswordDefault}
-                label="PIN admin"
-                value={maint.env.adminPasswordDefault ? "Masih default (0099)" : "Sudah diganti"}
-                sub="Ganti lewat env ADMIN_PASSWORD"
+                label="Password admin"
+                value={maint.env.adminPasswordDefault ? "Default lokal / belum aman" : "Sudah diatur"}
+                sub="Gunakan passphrase unik melalui env ADMIN_PASSWORD"
               />
               <MaintStat
                 ok
@@ -2933,13 +3011,13 @@ function Section({ title, sub, right, children }: {
   title: string; sub?: string; right?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
+    <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-white">{title}</h2>
           {sub && <p className="text-sm text-white/45">{sub}</p>}
         </div>
-        {right}
+        {right && <div className="max-w-full shrink-0">{right}</div>}
       </div>
       {children}
     </section>
@@ -3060,16 +3138,17 @@ function Dropdown({ value, options, onChange }: {
   );
 }
 
-function IconBtn({ children, onClick, disabled, title, color = "text-white/40" }: {
-  children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string; color?: string;
+function IconBtn({ children, onClick, disabled, title, color = "text-white/40", className = "" }: {
+  children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string; color?: string; className?: string;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`rounded-lg p-1.5 transition hover:bg-white/10 hover:text-white disabled:opacity-20 ${color}`}
+      className={`flex h-10 min-w-10 items-center justify-center rounded-lg p-1.5 transition hover:bg-white/10 hover:text-white disabled:opacity-20 ${color} ${className}`}
     >
       {children}
     </button>
@@ -3284,6 +3363,9 @@ function MoveDownIcon() {
 }
 function EyeIcon() {
   return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>;
+}
+function EditIcon() {
+  return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>;
 }
 function TrashIcon() {
   return <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>;

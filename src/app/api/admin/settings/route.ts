@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { readStore, writeStore, normalize } from "@/lib/data";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, sameOriginRequest } from "@/lib/auth";
 import { getTechIcon } from "@/lib/stackIcons";
 
 // PATCH individual setting groups: social, seo, fonts, theme, branding
 export async function PATCH(req: Request) {
+  if (!sameOriginRequest(req)) {
+    return NextResponse.json({ error: "Origin tidak diizinkan" }, { status: 403 });
+  }
   if (!(await isAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

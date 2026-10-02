@@ -56,3 +56,15 @@ cookie tanpa tanda tangan 401; brute-force 429.
 3. Ganti `rulesUrl` di panel admin SEO ke `https://rules.xyc.my.id/` (untuk fallback modal).
 4. Merge branch `xydev/security-hardening` di xycloud-policy bila gate hardening diinginkan;
    bio-link kompatibel dengan kedua versi gate.js.
+
+## F. Follow-up implementation (2026-10-02)
+
+The entries above describe the earlier audit snapshot. The following changes are now implemented in the working tree and verified locally; they have not yet been pushed or deployed:
+
+- Admin authentication now uses a password/passphrase input. Production login fails closed unless both `ADMIN_PASSWORD` and `SESSION_SECRET` are configured. Same-origin checks cover authenticated admin mutations and uploads; the cron endpoint requires a bearer secret in production and no longer accepts a query-string secret.
+- D1 access now uses a shared parameterized REST helper with HTTP/API error checks and retries. Login, story interactions, cron, and public visit/click tracking use an atomic D1-backed rate limiter when D1 is configured, with a bounded in-memory fallback for local development.
+- Link creation and editing share one admin form. The API validates title length and allows only `http`, `https`, `mailto`, `tel`, and `sms` URL schemes; stored link data is also normalized.
+- The public tech-stack icons wrap instead of overlapping; the admin section headers/story controls wrap on narrow screens. Dynamic viewport sizing and safe-area spacing were added for mobile.
+- Added `tests/responsive-links.mjs` and `npm run test:responsive`. It checks the public page at 320, 360, 390, 430, 768, 1024, and 1440 px; every admin section at 320, 768, and 1440 px; add/edit link; unsafe URL rejection; and cross-origin mutation rejection.
+
+Local verification completed: `npm run lint`, `npx tsc --noEmit`, `npm run build`, and the responsive/link e2e all pass. A production-mode check without auth environment variables returned 503 for login, 401 for admin access, and 401 for the cron endpoint. Vercel production was checked without reading secret values: `ADMIN_PASSWORD` and `CRON_SECRET` were already present; a new encrypted `SESSION_SECRET` was generated and added for production, preview, and development. The deploy that picks up this configuration is still pending; existing admin sessions will need to sign in again after the new session secret takes effect.

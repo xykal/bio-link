@@ -362,7 +362,10 @@ export default function StoryViewer({
         >
           <div className="relative h-full w-full overflow-hidden bg-black sm:aspect-[9/16] sm:h-[92vh] sm:w-auto sm:max-w-[94vw] sm:rounded-2xl">
             {/* bar progres per story; yang udah dilihat jadi abu-abu */}
-            <div className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-2">
+            <div
+              className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-2"
+              style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+            >
               {stories.map((s, i) => (
                 <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/25">
                   <div
@@ -382,7 +385,10 @@ export default function StoryViewer({
 
             {/* profil kiri-atas: avatar + nama ambil dari bio profile */}
             {profile && (
-              <div className="pointer-events-none absolute left-3 top-5 z-30 flex items-center gap-2">
+              <div
+                className="pointer-events-none absolute left-3 top-5 z-30 flex items-center gap-2"
+                style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}
+              >
                 {profile.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -409,6 +415,7 @@ export default function StoryViewer({
             <button
               onClick={closeStory}
               className="absolute right-3 top-5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
+              style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}
               aria-label="Tutup story"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -421,6 +428,7 @@ export default function StoryViewer({
               <button
                 onClick={() => setMuted((m) => !m)}
                 className="absolute right-3 top-14 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white"
+                style={{ top: "calc(max(1.25rem, env(safe-area-inset-top)) + 2.5rem)" }}
                 aria-label={muted ? "Nyalakan suara" : "Matikan suara"}
               >
                 {muted ? (
@@ -639,7 +647,10 @@ export default function StoryViewer({
             </div>
 
             {/* kontrol bawah: like + komentar */}
-            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/85 to-transparent p-3 pt-8">
+            <div
+              className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/85 to-transparent p-3 pt-8"
+              style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+            >
               {activeStory.type !== "text" && activeStory.type !== "audio" && activeStory.text && (
                 <p
                   className="mb-2 text-sm font-medium text-white drop-shadow"
@@ -691,6 +702,7 @@ export default function StoryViewer({
                 <div className="absolute inset-0 bg-black/45" />
                 <div
                   className="animate-sheet-up absolute bottom-0 left-0 right-0 flex max-h-[75%] flex-col overflow-hidden rounded-t-3xl border-t border-white/10 bg-[#13131b] p-4 pb-5"
+                  style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-white/20" />
