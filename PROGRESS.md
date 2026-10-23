@@ -469,3 +469,26 @@ pada wrapper supaya koin punya tempat sendiri.
 
 **Next Step:**
 - Test di device real, cek push notification
+
+### 2026-10-23 (lanjutan 10) - Penelusuran lonjakan XyDesk jam 05:00 UTC
+**Status:** Investigasi selesai; penyebab awal belum bisa dipastikan.
+
+**Temuan Cloudflare + GitHub:**
+- Trafik `xydesk-remote-web`: 3.874 req pada jam 05 UTC, 18.735 pada jam 06,
+  20.912 pada jam 07.
+- Riwayat versi Cloudflare: deploy 05:33, dua deploy 05:44, lalu 06:04 UTC.
+  Versi 05:33 punya ETag kode identik dengan versi sebelumnya.
+- Commit `909076d4` (05:44:52 UTC) memangkas interval polling riwayat chat Android
+  dari 300s menjadi 3,5s saat WebSocket aktif (~86x lebih sering), dan dari 10s
+  menjadi 6s saat WebSocket putus. APK build sukses 06:13 UTC, tetapi `v1.1.23`
+  masih draft saat dicek.
+- Temuan ini masuk akal sebagai faktor yang memperbesar trafik setelah jam 06,
+  jika APK baru sudah dipakai, tetapi tidak menjelaskan awal lonjakan jam 05.
+  Log detail Cloudflare (path/IP/user-agent) telah lewat retensi ±3 jam; tidak
+  cukup bukti untuk memastikan satu sumber atau menyebutnya serangan.
+
+**Yang diubah:** `WORKERS-AUDIT.md` ditambah kronologi dan kesimpulan sementara.
+**Next step:** jangan rilis build dengan polling 3,5s ke Worker; arahkan ke Firebase
+sebelum publikasi. Tahan penghapusan Worker hingga migrasi semua klien/domain tuntas.
+
+---

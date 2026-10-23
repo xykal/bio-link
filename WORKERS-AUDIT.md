@@ -95,3 +95,39 @@ tetap 0 kuota Worker.
 **B. Hapus widget-nya.** Karena XyDesk mau pindah ke Firebase, menaruh
 infrastruktur baru untuk fitur ini justru pemborosan. Setelah migrasi, Worker
 `xydesk-remote-web` dihapus dan masalahnya selesai sendiri.
+
+## Investigasi lonjakan 05:00 UTC — hasil 23 Okt 2026
+
+### Yang bisa dipastikan
+
+- `xydesk-remote-web` hampir tidak ada trafik sampai sekitar 05:00 UTC; lalu
+  mencapai **3.874 request** pada jam 05, **18.735** pada jam 06, dan **20.912**
+  pada jam 07. Hari ini totalnya sekitar **121.823**.
+- Riwayat versi Cloudflare menunjukkan upload/deploy Wrangler pada **05:33**,
+  **05:44** (dua upload), dan **06:04 UTC**. Versi 05:33 memiliki ETag kode yang
+  sama dengan versi sebelumnya (18:11 UTC hari sebelumnya), jadi tidak tampak
+  sebagai perubahan kode baru.
+- Pada **05:44:52 UTC**, commit `909076d4` mengubah polling riwayat chat Android:
+  - WebSocket tersambung: **300 detik → 3,5 detik** (sekitar **86x lebih sering**).
+  - WebSocket putus: **10 detik → 6 detik** (sekitar **1,7x lebih sering**).
+  - APK hasil build berhasil pada **06:13 UTC**. Saat dicek, release `v1.1.23`
+    masih berstatus **draft**.
+- Data observability per-request Cloudflare sudah lewat jendela retensi (±3 jam)
+  ketika investigasi dilakukan. Yang tersisa hanya agregat; tidak tersedia lagi
+  path, IP, atau user-agent untuk memastikan endpoint/klien mana yang menjadi
+  sumber request.
+
+### Kesimpulan sementara (belum terbukti sebagai satu-satunya penyebab)
+
+Perubahan polling chat di 05:44 **sangat mungkin memperbesar** trafik setelah
+jam 06, jika APK baru sempat dipasang/dipakai. Namun ia **tidak menjelaskan
+awal lonjakan pada 05:00**, karena commit dan deploy-nya terjadi kemudian; dan
+release APK masih draft saat diperiksa. Jadi penyebab awal bisa berupa lonjakan
+pengunjung/sesi yang sudah berjalan, atau aktivitas lain pada API. Data yang ada
+tidak cukup untuk menuduh bot/serangan maupun memastikan jumlah klien.
+
+**Saran:** jangan publikasikan build dengan polling 3,5 detik ke Worker Cloudflare.
+Karena XyDesk sedang dimigrasikan ke Firebase, nonaktifkan polling Cloudflare
+pada release berikutnya / arahkan transport ke Firebase sebelum distribusi.
+Jangan hapus Worker sampai semua pengguna benar-benar pindah dan domain/API
+sudah tidak dipakai.
