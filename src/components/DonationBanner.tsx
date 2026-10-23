@@ -78,7 +78,7 @@ export default function DonationBanner({
     : "linear-gradient(135deg,#191322 0%,#241a2e 45%,#141019 100%)";
 
   return (
-    <div className="relative mt-14 w-full">
+    <div className="relative mb-12 mt-16 w-full pt-[78px] sm:pt-[100px]">
       {/* ── elemen 3D melayang DI LUAR kartu ─────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 select-none" aria-hidden>
         {/* tumpukan koin besar (kiri atas) */}
@@ -86,28 +86,28 @@ export default function DonationBanner({
         <img
           src="/donation-coins.webp"
           alt=""
-          width={620}
-          height={512}
-          className="don-float-a absolute -left-4 -top-12 w-[44%] max-w-[200px] drop-shadow-[0_18px_28px_rgba(0,0,0,0.45)] sm:-left-12 sm:-top-16 sm:w-[230px] sm:max-w-none"
+          width={420}
+          height={347}
+          className="don-float-a absolute -left-1 top-0 w-[104px] drop-shadow-[0_18px_28px_rgba(0,0,0,0.5)] sm:-left-6 sm:w-[132px]"
         />
-        {/* koin tunggal (kanan bawah, muter pelan) */}
+        {/* koin tunggal (kanan bawah, di luar kartu) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/donation-coin.webp"
           alt=""
           width={260}
           height={141}
-          className={`don-float-b absolute -bottom-8 -right-3 w-[32%] max-w-[140px] drop-shadow-[0_14px_22px_rgba(0,0,0,0.45)] sm:-right-10 sm:-bottom-10 sm:w-[165px] sm:max-w-none ${
+          className={`don-float-b absolute -right-2 top-[calc(100%+6px)] w-[104px] drop-shadow-[0_14px_22px_rgba(0,0,0,0.5)] sm:-right-7 sm:w-[126px] ${
             pulse ? "don-pop" : ""
           }`}
         />
         {/* kilau kecil */}
         <span
-          className="don-twinkle absolute -top-3 right-10 h-2 w-2 rounded-full"
+          className="don-twinkle absolute right-6 top-2 h-2 w-2 rounded-full"
           style={{ background: "#ffd76a", boxShadow: "0 0 12px 4px rgba(255,215,106,0.6)" }}
         />
         <span
-          className="don-twinkle absolute bottom-14 -left-2 h-1.5 w-1.5 rounded-full"
+          className="don-twinkle absolute -right-1 top-[calc(100%+70px)] h-1.5 w-1.5 rounded-full"
           style={{
             background: "#c084fc",
             boxShadow: "0 0 10px 3px rgba(192,132,252,0.55)",
@@ -122,7 +122,7 @@ export default function DonationBanner({
         target="_blank"
         rel="noreferrer"
         onClick={onClick}
-        className={`don-card relative block overflow-hidden rounded-[26px] border p-5 backdrop-blur-md transition-transform duration-300 hover:-translate-y-0.5 ${
+        className={`don-card relative block overflow-hidden rounded-[28px] border p-6 backdrop-blur-md transition-transform duration-300 hover:-translate-y-0.5 ${
           isLight ? "border-amber-300/60 shadow-[0_18px_40px_-24px_rgba(120,60,0,0.5)]" : "border-amber-300/25 shadow-[0_22px_50px_-28px_rgba(255,190,80,0.45)]"
         }`}
         style={{ background: cardBg }}
@@ -140,7 +140,7 @@ export default function DonationBanner({
         />
 
         <div className="relative flex items-start gap-3">
-          <div className="min-w-0 flex-1 pl-14 sm:pl-20">
+          <div className="min-w-0 flex-1">
             <p
               className="text-[10px] font-bold uppercase tracking-[0.22em]"
               style={{ color: isLight ? "#b45309" : "#fbbf24" }}
@@ -148,14 +148,14 @@ export default function DonationBanner({
               Dukungan
             </p>
             <h2
-              className="mt-1 text-[17px] font-extrabold leading-tight sm:text-[19px]"
+              className="mt-1 text-[20px] font-extrabold leading-tight sm:text-[23px]"
               style={{ fontFamily: "var(--font-name)" }}
             >
               {donation.headline}
             </h2>
             {donation.subtitle && (
               <p
-                className="mt-1.5 text-[12.5px] leading-relaxed opacity-70"
+                className="mt-2 text-[13px] leading-relaxed opacity-70 sm:text-[13.5px]"
                 style={{ fontFamily: "var(--font-bio)" }}
               >
                 {donation.subtitle}
@@ -185,7 +185,7 @@ export default function DonationBanner({
 
             <div className="mt-3.5 flex flex-wrap items-center gap-2">
               <span
-                className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12.5px] font-bold text-white shadow-lg transition-transform group-hover:scale-[1.02]"
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[13px] font-bold text-white shadow-lg transition-transform hover:scale-[1.03]"
                 style={{
                   background: "linear-gradient(135deg,#f59e0b,#f97316)",
                   boxShadow: "0 10px 24px -10px rgba(245,158,11,0.8)",
