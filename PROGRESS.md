@@ -28,7 +28,7 @@
 ---
 
 ### 2026-10-23 - Migrasi hosting Vercel -> Cloudflare Workers (OpenNext)
-**Status:** In Progress (kode + konfigurasi selesai, verifikasi runtime lolos; deploy menunggu API token Cloudflare pulih dari rate-limit)
+**Status:** Done (Worker live di Cloudflare; custom domain tinggal hapus CNAME lama ke Vercel)
 **Dikerjain oleh:** AI Agent + xykal
 
 **Yang dikerjain:**
@@ -61,11 +61,12 @@
 **Build & Release:**
 - `npx tsc --noEmit` lolos, `next build` lolos, `opennextjs-cloudflare build` lolos (`Worker saved in .open-next/worker.js`).
 - Uji runtime `wrangler dev` (workerd + D1 lokal): `/` 200, `/api/data` 200, `/admin` 200, cron 200 (`{"ok":true,...}`), handler `scheduled()` jalan.
+- **Deploy production:** Worker `bio-link` versi `19dd6a21-0856-4b1a-9ef4-4a0fc9702867` di https://bio-link.dikanjut.workers.dev, 6 secret terpasang, Cron Trigger `15 20 * * *`, D1 binding ke database `bio-link`.
+- CI: `Build` dan `Deploy Cloudflare` hijau (run `2dbae2a`).
+- Smoke test production: `/` 200 (profil asli), `/admin` 200, `/api/data` 200 (data D1 asli), login 200 + cookie Secure, login salah 401, `/api/admin/stats` 200 (3.706 kunjungan), cron dengan secret 200, tanpa secret 401.
 
 **Next Step:**
-- Deploy ke Cloudflare (`npm run deploy`) begitu token API bisa dipakai lagi; set Worker secret `ADMIN_PASSWORD`, `SESSION_SECRET`, `CRON_SECRET`, `CLOUDINARY_*`.
-- Pasang custom domain `bio.haekal.web.id` di Worker + hapus domain dari project Vercel.
-- Simpan `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` sebagai secret repo GitHub untuk workflow deploy.
+- Hapus CNAME `bio.haekal.web.id` -> `cname.vercel-dns.com` (butuh token dengan izin Zone DNS:Edit), lalu tambahkan custom domain di Worker dan hapus domain dari project Vercel.
 - Rotasi semua kredensial yang pernah dibagikan di chat (Resend, Cloudinary, GitHub, Cloudflare, Vercel, OneSignal, Pakasir, Grok, Tailscale).
 
 ---
