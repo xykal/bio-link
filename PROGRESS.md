@@ -27,6 +27,32 @@
 
 ---
 
+### 2026-10-23 (lanjutan 3) - SEO siap indeks + kata kunci + PIN admin
+**Status:** Done
+
+**Yang dikerjain:**
+- **Kata kunci pencarian bisa diatur dari panel**: `SeoConfig.keywords` (maks 30, tiap 40 karakter) dipakai
+  untuk `<meta name="keywords">` di `/`, `/project`, `/shop` dan untuk `knowsAbout` di JSON-LD Person —
+  sinyal topik yang dibaca Google (meta keywords sendiri praktis diabaikan Google, tapi Bing/Yandex masih pakai).
+- **Verifikasi Search Console tanpa sentuh kode**: field `googleVerification` -> otomatis jadi
+  `<meta name="google-site-verification">`. Jadi cukup tempel nilai dari GSC di panel.
+- **Canonical beranda** ditambahkan (`https://bio.haekal.web.id`) — sebelumnya hanya /project & /shop.
+- **BreadcrumbList** di /project (Bio -> Project) supaya hasil pencarian menampilkan jejak navigasi.
+- **JSON-LD Person** sekarang menyertakan `mainEntityOfPage` (WebSite + `inLanguage: id-ID`).
+- Panel SEO dapat catatan sitemap/robots + pengingat submit ke Search Console.
+- **Login admin diperkuat** karena PIN jadi pendek (`0099`): limiter per-IP 10x/10 menit tetap ada, ditambah
+  **limiter global 60x/15 menit lintas IP** dan jeda 350 ms tiap password salah (memperlambat brute force).
+
+**File yang diubah:**
+- `src/lib/data.ts` (SeoConfig + seed + normalize), `src/app/page.tsx`, `src/app/project/page.tsx`,
+  `src/app/shop/page.tsx`, `src/app/admin/AdminPanel.tsx`, `src/app/api/auth/login/route.ts`.
+
+**Next Step:**
+- Set Worker secret `ADMIN_PASSWORD=0099` (dilakukan di sesi ini) — kalau nanti mau lebih aman, ganti ke PIN 6 digit.
+- Submit `https://bio.haekal.web.id/sitemap.xml` di Google Search Console (butuh akun Google pemilik domain).
+
+---
+
 ### 2026-10-23 (lanjutan 2) - Bersih-bersih emoji & optimasi performa
 **Status:** Done
 

@@ -230,6 +230,8 @@ export type SeoConfig = {
   favicon: string; // image url (Cloudinary) or "" for default
   ogImage: string; // OpenGraph banner url (Cloudinary)
   rulesUrl: string; // gate rules url
+  keywords: string[]; // kata kunci pencarian (meta keywords + JSON-LD knowsAbout)
+  googleVerification: string; // isi content dari <meta name="google-site-verification">
 };
 
 export type ThemeMode = "dark" | "light";
@@ -469,6 +471,28 @@ const DEFAULT_STORE: Store = {
     favicon: "",
     ogImage: "",
     rulesUrl: "https://rules.xyc.my.id/",
+    // Kata kunci awal: brand + nama project + topik yang memang dibahas.
+    // Google tidak memakai meta keywords, tapi Bing/Yandex masih, dan daftar
+    // ini juga dipakai untuk JSON-LD `knowsAbout`.
+    keywords: [
+      "Haekal",
+      "xykal",
+      "XySpace",
+      "XyCloud",
+      "XyCloudStore",
+      "XyDesk Remote",
+      "AppPerms",
+      "DLAja",
+      "XyDownloader",
+      "Nyawit Live",
+      "XyRDP",
+      "remote desktop browser",
+      "aplikasi Android",
+      "tool Shizuku",
+      "open source Indonesia",
+      "link in bio",
+    ],
+    googleVerification: "",
   },
   theme: "dark",
   background: { darkColor: "#08080d", lightColor: "#f7f7f9", glowStrength: 22 },
@@ -733,7 +757,21 @@ export function normalize(parsed: Partial<Store>): Store {
           }))
       : [],
     fonts: { ...d.fonts, ...(parsed.fonts || {}) },
-    seo: { ...d.seo, ...(parsed.seo || {}) },
+    seo: {
+      ...d.seo,
+      ...(parsed.seo || {}),
+      // Batas aman: maks 30 kata kunci, masing-masing 40 karakter.
+      keywords: Array.isArray(parsed.seo?.keywords)
+        ? parsed.seo!.keywords
+            .filter((k): k is string => typeof k === "string" && Boolean(k.trim()))
+            .map((k) => k.trim().slice(0, 40))
+            .slice(0, 30)
+        : d.seo.keywords,
+      googleVerification:
+        typeof parsed.seo?.googleVerification === "string"
+          ? parsed.seo.googleVerification.trim().slice(0, 120)
+          : d.seo.googleVerification,
+    },
     theme: parsed.theme === "light" ? "light" : "dark",
     background: {
       darkColor:

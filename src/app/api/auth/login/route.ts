@@ -15,6 +15,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Request terlalu besar" }, { status: 413 });
   }
 
+  // Dua lapis limiter:
+  // 1) per IP  — 10 percobaan / 10 menit
+  // 2) global  — 60 percobaan / 15 menit lintas IP. Ini jaring pengaman karena
+  //    PIN admin bisa pendek (4 digit): tanpa lapis kedua, penyerang dengan
+  //    banyak IP bisa menebak 0000-9999 dalam hitungan menit.
+  const gate = await sharedRateLimit("login:global", 60, 15 * 60_000);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Login sedang dikunci sementara. Coba lagi nanti." },
+      { status: 429, headers: { "Retry-After": String(gate.retryAfterSec) } }
+    );
+  }
   const rate = await sharedRateLimit(`login:${clientIp(req)}`, 10, 10 * 60_000);
   if (!rate.ok) {
     return NextResponse.json(
@@ -26,6 +38,9 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const password = typeof body.password === "string" ? body.password.slice(0, 256) : "";
   if (!verifyPassword(password)) {
+    // Jeda kecil: bikin brute-force online jauh lebih lambat tanpa bikin
+    // pengguna asli nunggu lama.
+    await new Promise((resolve) => setTimeout(resolve, 350));
     return NextResponse.json({ ok: false, error: "Password salah" }, { status: 401 });
   }
 

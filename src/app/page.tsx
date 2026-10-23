@@ -49,10 +49,17 @@ export async function generateMetadata(): Promise<Metadata> {
     ? [{ url: optImg(seo.ogImage, { w: 1200, h: 630, crop: "fill" }) }]
     : [{ url: "https://bio.haekal.web.id/og-default.jpg", width: 1200, height: 630, alt: title }];
 
+  const keywords = seo?.keywords?.length ? seo.keywords : undefined;
+
   return {
     title,
     description,
+    keywords,
     icons,
+    alternates: { canonical: "https://bio.haekal.web.id" },
+    verification: seo?.googleVerification
+      ? { google: seo.googleVerification }
+      : undefined,
     // Marker deploy: biar gampang ngecek build mana yang live di prod.
     other: { "x-build": "r16-perf-edge" },
     openGraph: {
@@ -77,6 +84,15 @@ const personJsonLd = (store: Awaited<ReturnType<typeof getStore>>) => ({
   url: "https://bio.haekal.web.id",
   image: store?.profile.avatar || "https://bio.haekal.web.id/icon.png",
   sameAs: Object.values(store?.social || {}).filter(Boolean),
+  // knowsAbout: sinyal topik ke Google (dipakai dari daftar kata kunci panel).
+  knowsAbout: store?.seo.keywords?.length ? store.seo.keywords : undefined,
+  // Profil situs: bantu Google mengaitkan situs dengan orang yang sama.
+  mainEntityOfPage: {
+    "@type": "WebSite",
+    name: store?.seo.title || "Haekal · Bio Link",
+    url: "https://bio.haekal.web.id",
+    inLanguage: "id-ID",
+  },
 });
 
 export default async function Home() {

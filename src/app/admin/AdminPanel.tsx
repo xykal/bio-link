@@ -2530,9 +2530,46 @@ export default function AdminPanel() {
                 <ImageField label="Favicon" value={seo.favicon} onChange={(v) => setSeo({ ...seo, favicon: v })} onUpload={upload} folder="bio-link/favicon" />
                 <ImageField label="OG Banner" value={seo.ogImage} onChange={(v) => setSeo({ ...seo, ogImage: v })} onUpload={upload} folder="bio-link/og" />
               </div>
+              <Field
+                label="Kata kunci pencarian"
+                hint="Pisahkan dengan koma. Dipakai untuk meta keywords + JSON-LD knowsAbout (maks 30)."
+              >
+                <textarea
+                  className={inputCls}
+                  rows={3}
+                  value={(seo.keywords || []).join(", ")}
+                  onChange={(e) =>
+                    setSeo({
+                      ...seo,
+                      keywords: e.target.value
+                        .split(",")
+                        .map((k) => k.trim())
+                        .filter(Boolean)
+                        .slice(0, 30),
+                    })
+                  }
+                  placeholder="Haekal, xycal, XyCloudStore, remote desktop, aplikasi Android"
+                />
+              </Field>
+              <Field
+                label="Google Search Console"
+                hint="Tempel nilai content dari <meta name=&quot;google-site-verification&quot; …>. Kosongkan kalau verifikasi lewat DNS."
+              >
+                <input
+                  className={inputCls}
+                  value={seo.googleVerification || ""}
+                  onChange={(e) => setSeo({ ...seo, googleVerification: e.target.value })}
+                  placeholder="abc123…"
+                />
+              </Field>
               <Field label="URL Rules (untuk gate)" hint="Biarkan default https://rules.xyc.my.id/ agar gate menampilkan halaman aturan">
                 <input className={inputCls} value={seo.rulesUrl} onChange={(e) => setSeo({ ...seo, rulesUrl: e.target.value })} />
               </Field>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[11.5px] leading-relaxed text-white/45">
+                Sitemap: <code className="text-white/70">https://bio.haekal.web.id/sitemap.xml</code> · robots:{" "}
+                <code className="text-white/70">/robots.txt</code>. Setelah simpan, submit sitemap di Search Console
+                (Sitemaps → tambah URL di atas) supaya Google merayapi / , /project , dan /shop.
+              </div>
               <button onClick={() => saveSettings({ seo })} className={btnCls}>Simpan SEO</button>
             </div>
           )}

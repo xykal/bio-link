@@ -24,6 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description,
+    keywords: store?.seo.keywords?.length ? store.seo.keywords : undefined,
     alternates: { canonical: `${SITE}/project` },
     openGraph: {
       title,
@@ -52,6 +53,13 @@ export default async function ProjectPage() {
         name: `Project ${store?.profile.name || "Haekal"}`,
         url: `${SITE}/project`,
         isPartOf: { "@type": "WebSite", name: store?.seo.title || "Bio Link", url: SITE },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Bio", item: SITE },
+          { "@type": "ListItem", position: 2, name: "Project", item: `${SITE}/project` },
+        ],
       },
       {
         "@type": "ItemList",
