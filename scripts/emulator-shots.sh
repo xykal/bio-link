@@ -38,8 +38,21 @@ seen_hash() {
   return 1
 }
 
+foreground_pkg() {
+  adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | sed -n 's/.* \([a-zA-Z0-9_.]*\/[a-zA-Z0-9_.]*\).*/\1/p' | cut -d/ -f1
+}
+
 shot() {
-  local name="$1" tmp="/tmp/_shot.png"
+  # $1 nama file, $2 (opsional) paket yang harus sedang tampil
+  local name="$1" expect="${2:-}" tmp="/tmp/_shot.png"
+  if [ -n "$expect" ]; then
+    local fg
+    fg=$(foreground_pkg)
+    if [ "$fg" != "$expect" ]; then
+      echo "   !! $name dilewati: layar depan = ${fg:-?}, bukan $expect"
+      return 0
+    fi
+  fi
   adb exec-out screencap -p > "$tmp" 2>/dev/null
   local size
   size=$(stat -c%s "$tmp" 2>/dev/null || echo 0)
@@ -93,7 +106,8 @@ PY
 }
 
 capture_app() {
-  local name="$1" apk="$2"
+  local name="$1" apk="$2"; shift 2
+  local taps=("$@")   # label tombol/tab yang mau diklik setelah layar utama
   echo "== $name =="
 
   local before after pkg
@@ -104,45 +118,36 @@ capture_app() {
   fi
   after=$(adb shell pm list packages -3 2>/dev/null | sort)
   pkg=$(comm -13 <(echo "$before") <(echo "$after") | head -1 | sed 's/^package://' | tr -d '\r')
-  if [ -z "$pkg" ]; then
-    echo "   !! paket tidak terdeteksi, lewati"
-    return 0
-  fi
+  [ -z "$pkg" ] && { echo "   !! paket tidak terdeteksi, lewati"; return 0; }
   echo "   pkg=$pkg"
 
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
   sleep 9
-  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1   # tutup dialog sisa (kalau ada)
+  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1   # tutup dialog sisa
   sleep 1
   adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
-  sleep 5
-  shot "${name}-1"
+  sleep 6
+  shot "${name}-1" "$pkg"
 
-  # buka tab/halaman lain lewat label yang umum dipakai app (best effort)
-  local label
-  for label in "Unduhan" "Downloads" "Atur" "Pengaturan" "Settings" "Tentang" "About" "Menu" "Profil" "Riwayat" "History"; do
+  local label n=2
+  for label in "${taps[@]}"; do
+    [ -z "$label" ] && continue
     if tap_text "$label"; then
       sleep 3
-      shot "${name}-$(echo "$label" | tr '[:upper:]' '[:lower:]')"
-      adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1
-      sleep 1
-      break
+      shot "${name}-${n}" "$pkg"
+      n=$((n+1))
     fi
   done
-
-  # geser konten (kalau halamannya bisa di-scroll)
-  adb shell input swipe 540 1900 540 700 300 >/dev/null 2>&1
-  sleep 3
-  shot "${name}-scroll"
 
   adb shell am force-stop "$pkg" >/dev/null 2>&1
   sleep 1
 }
 
-capture_app appperms apks/appperms.apk
-capture_app dlaja     apks/dlaja.apk
-capture_app kilat     apks/kilat.apk
-capture_app nyawit    apks/nyawit.apk
+# label tap = tombol/tab yang ada di app (best effort, kalau tak ketemu dilewati)
+capture_app appperms apks/appperms.apk "Permintaan izin" "Overlay" "Semua aplikasi"
+capture_app dlaja     apks/dlaja.apk     "Unduhan" "Atur"
+capture_app kilat     apks/kilat.apk     "Lanjut" "Lewati"
+capture_app nyawit    apks/nyawit.apk    "Got it" "OK"
 
 rm -f "$RAW/.hashes"
 echo "== hasil =="

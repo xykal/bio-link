@@ -19,6 +19,9 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 0
 fi
 
+# Buang WebP lama supaya set yang tersimpan selalu sinkron dengan RAW terbaru.
+rm -f "$OUT"/*.webp
+
 for f in "${files[@]}"; do
   base=$(basename "$f" .png)
   # 720px lebar: cukup tajam untuk kartu & hero, tetap kecil (~60-120 KB)
