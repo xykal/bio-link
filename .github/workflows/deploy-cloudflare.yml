@@ -29,7 +29,13 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint
         run: npm run lint
-      - name: Build & deploy to Cloudflare Workers
+      # `wrangler deploy` mendeteksi project OpenNext dan meneruskan ke
+      # `opennextjs-cloudflare deploy`, yang butuh hasil build di `.open-next`.
+      # Jadi build dulu di step terpisah (tanpa ini error:
+      # "Could not find compiled Open Next config").
+      - name: Build OpenNext bundle
+        run: npx opennextjs-cloudflare build
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
