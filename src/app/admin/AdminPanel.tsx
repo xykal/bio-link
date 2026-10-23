@@ -790,6 +790,7 @@ export default function AdminPanel() {
   // ---- project & shop ----
   const EMPTY_PROJECT: ProjectItem = {
     id: "",
+    slug: "",
     title: "",
     description: "",
     image: "",
@@ -2651,7 +2652,7 @@ export default function AdminPanel() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-white/90">{p.title}</p>
                           <p className="truncate text-[11px] text-white/40">
-                            {p.status} · {p.stack.join(", ") || "tanpa stack"}
+                            /project/{p.slug} · {p.status} · {p.stack.join(", ") || "tanpa stack"}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
@@ -2706,6 +2707,22 @@ export default function AdminPanel() {
                         value={projDraft.title}
                         onChange={(e) => setProjDraft({ ...projDraft, title: e.target.value })}
                         placeholder="XyDesk Remote"
+                      />
+                    </Field>
+                    <Field
+                      label="Slug URL"
+                      hint="Kosongkan untuk otomatis dari judul. Hasil: /project/slug-ini"
+                    >
+                      <input
+                        className={inputCls}
+                        value={projDraft.slug}
+                        onChange={(e) =>
+                          setProjDraft({
+                            ...projDraft,
+                            slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                          })
+                        }
+                        placeholder="xydesk-remote"
                       />
                     </Field>
                     <Field label="Status">

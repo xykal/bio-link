@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { optImg } from "@/lib/img";
 import type { ProjectItem } from "@/lib/data";
@@ -116,7 +117,11 @@ export default function ProjectGrid({
                 : "border-white/10 bg-white/[0.04] shadow-[0_16px_40px_-24px_rgba(0,0,0,0.9)]"
             }`}
           >
-            <div className="relative aspect-[16/9] w-full overflow-hidden">
+            <Link
+              href={`/project/${p.slug}`}
+              aria-label={`Detail project ${p.title}`}
+              className="relative block aspect-[16/9] w-full overflow-hidden"
+            >
               <ProjectCover
                 key={`${p.id}|${p.image}|${p.repoUrl}`}
                 project={p}
@@ -144,10 +149,14 @@ export default function ProjectGrid({
                   Unggulan
                 </span>
               )}
-            </div>
+            </Link>
 
             <div className="flex flex-1 flex-col p-4">
-              <h3 className="text-[15px] font-bold leading-tight">{p.title}</h3>
+              <h3 className="text-[15px] font-bold leading-tight">
+                <Link href={`/project/${p.slug}`} className="transition hover:text-white">
+                  {p.title}
+                </Link>
+              </h3>
               {p.description && (
                 <p className="mt-1.5 line-clamp-3 text-[12.5px] leading-relaxed opacity-70">
                   {p.description}
@@ -172,6 +181,12 @@ export default function ProjectGrid({
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href={`/project/${p.slug}`}
+                  className="flex-1 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-center text-[12px] font-semibold text-white/80 transition hover:bg-white/[0.12]"
+                >
+                  Detail
+                </Link>
                 {p.demoUrl && (
                   <a
                     href={p.demoUrl}

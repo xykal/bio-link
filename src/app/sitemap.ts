@@ -11,10 +11,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   let tabs = { projects: true, shop: false };
   let shopEnabled = false;
+  let projects: { slug: string }[] = [];
   try {
     const store = await readStore();
     tabs = store.tabs;
     shopEnabled = store.shop.enabled;
+    projects = store.projects.filter((p) => p.enabled).map((p) => ({ slug: p.slug }));
   } catch {
     /* pakai default: hanya halaman bio */
   }
@@ -28,6 +30,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
+    });
+  }
+  // Halaman detail per project: URL-nya unik per project -> paling gampang
+  // diindeks Google dibanding satu halaman daftar panjang.
+  for (const p of projects) {
+    entries.push({
+      url: `${SITE}/project/${p.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.6,
     });
   }
   if (tabs.shop && shopEnabled) {

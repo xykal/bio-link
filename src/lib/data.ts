@@ -1,6 +1,7 @@
 import crypto, { randomUUID } from "crypto";
 import { getTechIcon } from "./stackIcons";
 import { isAllowedLinkUrl } from "./links";
+import { slugify, uniqueSlug } from "./slug";
 import { d1Available, d1Query } from "./d1";
 import { cacheGet, cacheSet, cacheInvalidate } from "./storecache";
 
@@ -298,6 +299,8 @@ export type ProjectStatus = "live" | "beta" | "soon" | "archived";
 
 export type ProjectItem = {
   id: string;
+  /** Slug URL: /project/<slug>. Dibuat otomatis dari judul, bisa diubah di panel. */
+  slug: string;
   title: string;
   description: string;
   image: string; // cover (Cloudinary / URL)
@@ -513,6 +516,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "XyDesk Remote",
+      slug: "xydesk-remote",
       description:
         "Remote desktop Windows langsung dari browser — sesi RDP nyala dalam hitungan detik tanpa pasang aplikasi.",
       // Cover di-host lokal (public/covers, ~16 KB/WebP). Dulu pakai kartu OG
@@ -529,6 +533,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "AppPerms",
+      slug: "appperms",
       description:
         "Kelola izin aplikasi Android & display-over-other-apps lewat Shizuku, tanpa root dan tanpa ribet ADB.",
       image: "/covers/AppPerms.webp",
@@ -543,6 +548,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "DLAja · XyDownloader",
+      slug: "dlaja-xydownloader",
       description:
         "Downloader TikTok: video tanpa watermark, MP3, slide foto, sampai Live Photo — ringan dan offline-first.",
       image: "/covers/XyDownloader.webp",
@@ -557,6 +563,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "Nyawit Live",
+      slug: "nyawit-live",
       description:
         "Game 3D multiplayer bertema perkebunan sawit & haulage canter, dibangun dengan engine native buatan sendiri.",
       image: "/covers/nyawit-live.webp",
@@ -571,6 +578,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "XyRDP",
+      slug: "xyrdp",
       description:
         "Windows RDP 6 jam gratis lewat GitHub Actions + Tailscale, tinggal fork dan jalankan workflow.",
       image: "/covers/XyRDP.webp",
@@ -585,6 +593,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "XyCloudStore",
+      slug: "xycloudstore",
       description:
         "Sewa PC cloud, toko akun digital, CS realtime, dan dompet dalam satu tempat.",
       image: "/covers/XyCloudStore.webp",
@@ -599,6 +608,7 @@ const DEFAULT_STORE: Store = {
     {
       id: randomUUID(),
       title: "kilat-motion",
+      slug: "kilat-motion",
       description:
         "Editor motion graphics native Android untuk bikin animasi & video jedag-jedug tanpa watermark.",
       image: "/covers/kilat-motion.webp",
@@ -633,6 +643,20 @@ const DEFAULT_STORE: Store = {
   },
   maintenance: { autoEnabled: true, retentionDays: 30, log: [] },
 };
+
+/**
+ * Isi slug yang kosong dari judul + jamin unik. Dijalankan setiap kali data
+ * dibaca/ditulis, jadi project lama (sebelum ada slug) tetap dapat URL yang
+ * enak dibaca tanpa migrasi manual.
+ */
+function withProjectSlugs(list: ProjectItem[]): ProjectItem[] {
+  const taken = new Set<string>();
+  return list.map((p) => {
+    const wanted = p.slug && p.slug !== "" ? p.slug : slugify(p.title);
+    const slug = uniqueSlug(wanted, taken, "project");
+    return { ...p, slug };
+  });
+}
 
 export function normalize(parsed: Partial<Store>): Store {
   const d = DEFAULT_STORE;
@@ -818,31 +842,38 @@ export function normalize(parsed: Partial<Store>): Store {
       team: parsed.sections?.team !== false,
     },
     branding: { ...d.branding, ...(parsed.branding || {}) },
-    projects: Array.isArray(parsed.projects)
-      ? parsed.projects
-          .filter((p) => p && typeof p.title === "string" && p.title.trim())
-          .slice(0, 60)
-          .map((p, i) => ({
-            id: typeof p.id === "string" && p.id ? p.id.slice(0, 80) : randomUUID(),
-            title: p.title.trim().slice(0, 80),
-            description: typeof p.description === "string" ? p.description.slice(0, 400) : "",
-            image: typeof p.image === "string" ? p.image.slice(0, 500) : "",
-            stack: Array.isArray(p.stack)
-              ? p.stack
-                  .filter((t): t is string => typeof t === "string" && Boolean(t.trim()))
-                  .map((t) => t.trim().slice(0, 24))
-                  .slice(0, 8)
-              : [],
-            status: PROJECT_STATUSES.includes(p.status as ProjectStatus)
-              ? (p.status as ProjectStatus)
-              : "live",
-            demoUrl: typeof p.demoUrl === "string" && isAllowedLinkUrl(p.demoUrl) ? p.demoUrl.slice(0, 500) : "",
-            repoUrl: typeof p.repoUrl === "string" && isAllowedLinkUrl(p.repoUrl) ? p.repoUrl.slice(0, 500) : "",
-            featured: p.featured === true,
-            order: typeof p.order === "number" ? p.order : i,
-            enabled: p.enabled !== false,
-          }))
-      : [...d.projects],
+    projects: withProjectSlugs(
+      Array.isArray(parsed.projects)
+        ? parsed.projects
+            .filter((p) => p && typeof p.title === "string" && p.title.trim())
+            .slice(0, 60)
+            .map((p, i) => ({
+              id: typeof p.id === "string" && p.id ? p.id.slice(0, 80) : randomUUID(),
+              slug:
+                typeof p.slug === "string" && p.slug.trim()
+                  ? p.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60)
+                  : "",
+              title: p.title.trim().slice(0, 80),
+              description: typeof p.description === "string" ? p.description.slice(0, 400) : "",
+              image: typeof p.image === "string" ? p.image.slice(0, 500) : "",
+              stack: Array.isArray(p.stack)
+                ? p.stack
+                    .filter((t): t is string => typeof t === "string" && Boolean(t.trim()))
+                    .map((t) => t.trim().slice(0, 24))
+                    .slice(0, 8)
+                : [],
+              status: PROJECT_STATUSES.includes(p.status as ProjectStatus)
+                ? (p.status as ProjectStatus)
+                : "live",
+              demoUrl: typeof p.demoUrl === "string" && isAllowedLinkUrl(p.demoUrl) ? p.demoUrl.slice(0, 500) : "",
+              repoUrl: typeof p.repoUrl === "string" && isAllowedLinkUrl(p.repoUrl) ? p.repoUrl.slice(0, 500) : "",
+              featured: p.featured === true,
+              order: typeof p.order === "number" ? p.order : i,
+              enabled: p.enabled !== false,
+            }))
+        : [...d.projects]
+    ),
+
     products: Array.isArray(parsed.products)
       ? parsed.products
           .filter((p) => p && typeof p.name === "string" && p.name.trim())
