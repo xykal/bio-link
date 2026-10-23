@@ -32,7 +32,7 @@ export default function TabNav({
   return (
     <nav
       aria-label="Navigasi halaman"
-      className="mx-auto mt-5 flex w-full max-w-xs items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1 backdrop-blur"
+      className="mx-auto mt-5 flex w-full max-w-xs items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] p-1"
       style={{ ["--tab-accent" as string]: accent || "#8b5cf6" }}
     >
       {items.map((item) => {

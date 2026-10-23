@@ -175,7 +175,7 @@ export default function ShopGrid({
                     </div>
                   )}
                   {p.badge && (
-                    <span className="absolute left-2 top-2 rounded-full border border-white/20 bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
+                    <span className="absolute left-2 top-2 rounded-full border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
                       {p.badge}
                     </span>
                   )}

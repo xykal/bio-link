@@ -122,7 +122,7 @@ export default function DonationBanner({
         target="_blank"
         rel="noreferrer"
         onClick={onClick}
-        className={`don-card relative block overflow-hidden rounded-[28px] border p-6 backdrop-blur-md transition-transform duration-300 hover:-translate-y-0.5 ${
+        className={`don-card relative block overflow-hidden rounded-[28px] border p-6 transition-transform duration-300 hover:-translate-y-0.5 ${
           isLight ? "border-amber-300/60 shadow-[0_18px_40px_-24px_rgba(120,60,0,0.5)]" : "border-amber-300/25 shadow-[0_22px_50px_-28px_rgba(255,190,80,0.45)]"
         }`}
         style={{ background: cardBg }}
@@ -217,13 +217,24 @@ export default function DonationBanner({
                 setMuted((m) => !m);
                 if (muted) playCoinSound(false);
               }}
-              className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[13px] transition ${
+              className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
                 isLight
                   ? "border-black/10 bg-white/70 text-black/60 hover:bg-white"
                   : "border-white/15 bg-white/10 text-white/70 hover:bg-white/20"
               }`}
             >
-              {muted ? "🔇" : "🔔"}
+              {muted ? (
+                // ikon "speaker off" (stroke, bukan emoji)
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" />
+                  <path d="m16 9 5 6M21 9l-5 6" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" />
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" />
+                </svg>
+              )}
             </button>
           )}
         </div>

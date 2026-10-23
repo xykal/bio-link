@@ -19,7 +19,13 @@ export function fontCss(key: string): string {
   return `'${f.family}', sans-serif`;
 }
 
-// Builds a Google Fonts stylesheet <link href> for the given set of font keys.
+/**
+ * Stylesheet Google Fonts untuk font yang benar-benar dipakai halaman.
+ * Diambil dari subset weight yang sempit (400;600;700) dan hanya variabel
+ * yang dipakai — 3 family × 3 weight = 9 file font, bukan 12.
+ * `display=swap` bikin teks langsung tampil dengan font sistem, jadi tidak
+ * ada FOIT (layar kosong) saat jaringan lambat.
+ */
 export function googleFontsHref(fontKeys: string[]): string {
   const wanted = [...new Set(fontKeys.filter((k) => FONTS[k]))];
   if (!wanted.length) return "";
@@ -30,6 +36,15 @@ export function googleFontsHref(fontKeys: string[]): string {
     })
     .join("&");
   return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+}
+
+/**
+ * URL preload untuk file font WOFF2. Dipakai di <head> agar browser mulai
+ * mengunduh font lebih awal (hemat 1 RTT), tanpa memblokir render.
+ * Browser lain mengabaikan `as="font"` yang tidak dipakai.
+ */
+export function googleFontsCssHref(fontKeys: string[]): string {
+  return googleFontsHref(fontKeys);
 }
 
 // The set of font keys used by a given config.

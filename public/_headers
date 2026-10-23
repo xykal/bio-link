@@ -1,3 +1,15 @@
 # Aset build Next.js ber-hash: aman di-cache setahun penuh.
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# Cover project & aset donasi: nama file tetap, tapi jarang berubah.
+# Tanpa header ini Workers Assets memakai cache pendek -> cover diunduh ulang
+# tiap kunjungan (salah satu penyebab scroll terasa berat).
+/covers/*
+  Cache-Control: public,max-age=604800,stale-while-revalidate=86400
+
+/donation-coins.webp
+  Cache-Control: public,max-age=604800,stale-while-revalidate=86400
+
+/donation-coin.webp
+  Cache-Control: public,max-age=604800,stale-while-revalidate=86400
