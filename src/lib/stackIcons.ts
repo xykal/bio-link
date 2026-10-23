@@ -87,6 +87,11 @@ import {
   siTerraform,
   siNetlify,
   siShopify,
+  // tambahan: tech yang dipakai project di bio
+  siTailscale,
+  siJetpackcompose,
+  siSharp,
+  siObsstudio,
 } from "simple-icons";
 
 export type TechIcon = { slug: string; title: string; hex: string; path: string };
@@ -104,6 +109,7 @@ const RAW = [
   siEslint, siPrettier, siGitlab, siNotion, siUbuntu, siDebian, siMacos,
   siTensorflow, siPytorch, siPandas, siNumpy, siUnity, siUnrealengine, siBlender,
   siKubernetes, siTerraform, siNetlify, siShopify,
+  siTailscale, siJetpackcompose, siSharp, siObsstudio,
 ];
 
 export const TECH_ICONS: Record<string, TechIcon> = Object.fromEntries(

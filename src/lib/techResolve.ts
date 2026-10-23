@@ -58,10 +58,21 @@ const ALIASES: Record<string, string> = {
   scss: "sass",
   // produk khas
   shizuku: "android",
-  tailscale: "",
+  tailscale: "tailscale",
+  "jetpack compose": "jetpackcompose",
+  compose: "jetpackcompose",
+  "c#": "sharp",
+  csharp: "sharp",
+  "obs studio": "obsstudio",
+  obs: "obsstudio",
+  // label yang memang tidak punya logo resmi -> pakai titik warna (gaya GitHub)
   webrtc: "",
   websocket: "",
   websockets: "",
+  multiplayer: "",
+  canvas: "",
+  midtrans: "",
+  powershell: "",
 };
 
 const BY_TITLE = new Map<string, TechIcon>(
