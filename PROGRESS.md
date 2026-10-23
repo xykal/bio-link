@@ -27,6 +27,48 @@
 
 ---
 
+### 2026-10-23 (lanjutan 8) - Pemulihan domain OTOMATIS setelah kuota reset
+**Status:** Done, teruji (uji jalan nyata di runner)
+
+**Masalah:** halaman darurat statis (lanjutan 7) harus dibalikin manual ke Worker
+setelah kuota harian reset (00:00 UTC). Selain itu push ke `main` memicu deploy
+yang memasang lagi custom domain ke Worker -> halaman darurat tertendang.
+
+**Solusi:**
+
+1. `.github/workflows/emergency-restore.yml` - `schedule: "*/20 * * * *"` + manual.
+   - Cek apakah domain masih di Pages (`pages/projects/bio-link-emergency/domains`).
+     Kalau tidak -> selesai (mode normal), tidak menyentuh apa pun.
+   - Probe `https://bio-link.dikanjut.workers.dev/api/data` (workers.dev, jadi
+     tidak lewat domain/Pages) 5x dengan jeda 20 dtk. **200 + body JSON = kuota
+     sudah reset**.
+   - Kalau hidup: `npm ci` + `bash scripts/emergency-static.sh off`
+     (lepas domain Pages -> hapus CNAME -> `opennextjs-cloudflare build` +
+     `wrangler deploy` yang memasang lagi custom domain).
+   - Verifikasi `bio.haekal.web.id/api/data` sampai 5 menit. Kalau tetap gagal,
+     **otomatis balik ke halaman statis** (`on`) supaya situs tidak mati.
+2. Pengaman di `.github/workflows/deploy-cloudflare.yml`: step pertama "Cek mode
+   darurat" melewati (skip) seluruh step deploy kalau domain terpasang di Pages
+   ATAU halaman live mengandung penanda "Mode hemat". Terverifikasi di run
+   `39965599189`: `##[notice]Mode darurat aktif — deploy Worker dilewati`.
+
+**Bukti uji:** workflow di-dispatch manual (run `39965537077`) ->
+`Mode darurat aktif (domain di Pages)` -> `probe #1..#5 -> HTTP 429` ->
+`Worker masih 429 (kuota harian belum reset). Halaman statis dibiarkan aktif.`
+
+**Bonus perbaikan:** e2e `tests/responsive-links.mjs` masih mencari label
+"Password" padahal panel admin memakai "PIN Admin" sejak PIN 4 digit -> job
+`Build` selalu gagal (bukan karena perubahan terakhir). Diperbaiki, Build kini
+**success**.
+
+**Cara pakai manual (kalau perlu):**
+- `bash scripts/emergency-static.sh off` -> balik ke Worker sekarang juga
+  (mis. kuota di-upgrade ke paid).
+- `bash scripts/emergency-static.sh on`  -> paksa mode halaman statis.
+- Workflow `Emergency Restore` -> Run workflow (cek + pulihkan segera).
+
+---
+
 ### 2026-10-23 (lanjutan 7) - Insiden 429: kuota Workers akun habis
 **Status:** Tertangani (sementara), perlu upgrade/optimasi lanjutan
 
