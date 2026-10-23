@@ -10,9 +10,9 @@ Migrasi dari Vercel ke **Cloudflare Workers** (adapter `@opennextjs/cloudflare` 
 | Uji runtime `wrangler dev` (workerd + D1 lokal) | ✅ `/`, `/api/data`, `/admin`, cron 200 |
 | CI `Build` (typecheck, lint, build, Playwright e2e) | ✅ hijau |
 | CI `Deploy Cloudflare` (wrangler-action) | ✅ hijau, deploy `2dbae2a` |
-| **Worker live** | ✅ https://bio-link.dikanjut.workers.dev — versi `19dd6a21` |
+| **Worker live** | ✅ https://bio.haekal.web.id (juga https://bio-link.dikanjut.workers.dev) — versi `a42ef5c5` |
 | Cron Trigger `15 20 * * *` | ✅ terpasang; cron manual dibalas 200 |
-| Custom domain `bio.haekal.web.id` | ⏳ **sisa satu langkah**: hapus CNAME lama ke Vercel (token belum punya izin DNS) |
+| Custom domain `bio.haekal.web.id` | ✅ terpasang (CNAME lama ke Vercel dihapus, domain dilepas dari project Vercel) |
 
 Verifikasi production (23 Okt 2026, worker `bio-link`, region SEA):
 
@@ -27,7 +27,10 @@ Verifikasi production (23 Okt 2026, worker `bio-link`, region SEA):
 | `GET /api/cron/maintenance` + secret | 200 — `24 pengunjung lama dibersihkan; cache server dibuang` |
 | `GET /api/cron/maintenance` tanpa secret | 401 |
 
-Produksi lama di Vercel masih mati: `https://bio.haekal.web.id` membalas **402 DEPLOYMENT_DISABLED**.
+Domain `bio.haekal.web.id` kini dilayani Worker (`x-opennext: 1`, `server: cloudflare`), bukan lagi Vercel. Project Vercel `bio-link` tinggal menyisakan `bio-link-silk.vercel.app`.
+
+Rollback DNS (kalau perlu): record lama sudah dicadangkan di `/home/user/rollback/bio-dns-record.json`
+(`CNAME bio → cname.vercel-dns.com`, proxied).
 
 ## 0. Yang sudah jalan tanpa langkah ini
 

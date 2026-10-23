@@ -28,7 +28,7 @@
 ---
 
 ### 2026-10-23 - Migrasi hosting Vercel -> Cloudflare Workers (OpenNext)
-**Status:** Done (Worker live di Cloudflare; custom domain tinggal hapus CNAME lama ke Vercel)
+**Status:** Done — live di https://bio.haekal.web.id (Cloudflare Workers, versi a42ef5c5)
 **Dikerjain oleh:** AI Agent + xykal
 
 **Yang dikerjain:**
@@ -61,12 +61,14 @@
 **Build & Release:**
 - `npx tsc --noEmit` lolos, `next build` lolos, `opennextjs-cloudflare build` lolos (`Worker saved in .open-next/worker.js`).
 - Uji runtime `wrangler dev` (workerd + D1 lokal): `/` 200, `/api/data` 200, `/admin` 200, cron 200 (`{"ok":true,...}`), handler `scheduled()` jalan.
-- **Deploy production:** Worker `bio-link` versi `19dd6a21-0856-4b1a-9ef4-4a0fc9702867` di https://bio-link.dikanjut.workers.dev, 6 secret terpasang, Cron Trigger `15 20 * * *`, D1 binding ke database `bio-link`.
+- **Deploy production:** Worker `bio-link` versi `a42ef5c5-9327-4f45-8d88-50bc177556f3` di **https://bio.haekal.web.id** (+ workers.dev), 6 secret terpasang, Cron Trigger `15 20 * * *`, D1 binding ke database `bio-link`.
+- Custom domain: CNAME lama ke `cname.vercel-dns.com` dihapus (dicadangkan di `/home/user/rollback/bio-dns-record.json`), domain dilepas dari project Vercel `bio-link`, lalu `routes.custom_domain` di `wrangler.jsonc` dipasang lagi dan deploy sukses.
 - CI: `Build` dan `Deploy Cloudflare` hijau (run `2dbae2a`).
 - Smoke test production: `/` 200 (profil asli), `/admin` 200, `/api/data` 200 (data D1 asli), login 200 + cookie Secure, login salah 401, `/api/admin/stats` 200 (3.706 kunjungan), cron dengan secret 200, tanpa secret 401.
 
 **Next Step:**
-- Hapus CNAME `bio.haekal.web.id` -> `cname.vercel-dns.com` (butuh token dengan izin Zone DNS:Edit), lalu tambahkan custom domain di Worker dan hapus domain dari project Vercel.
+- (opsional) Aktifkan R2 kalau nanti mau ISR lagi (sekarang SSR edge, tidak butuh cache HTML).
+- Pantau biaya Workers/D1 di dashboard Cloudflare selama beberapa hari pertama setelah pindah dari Vercel.
 - Rotasi semua kredensial yang pernah dibagikan di chat (Resend, Cloudinary, GitHub, Cloudflare, Vercel, OneSignal, Pakasir, Grok, Tailscale).
 
 ---
