@@ -59,9 +59,12 @@ const EMPTY: AnalyticsData = {
 // fs hanya dipakai di mode file lokal (dev). Di Workers tidak ada filesystem
 // tulis, jadi import-nya dinamis supaya node:fs tidak masuk bundle utama.
 async function analyticsFile() {
-  const [{ promises: fs }, path] = await Promise.all([import("node:fs"), import("node:path")]);
-  const dir = path.join(process.cwd(), "data");
-  return { fs, dir, file: path.join(dir, "analytics.json") };
+  const [fsMod, pathMod] = await Promise.all([import("node:fs"), import("node:path")]);
+  const fs = fsMod.promises ?? fsMod.default?.promises;
+  const join = pathMod.join ?? pathMod.default?.join;
+  if (!fs || !join) throw new Error("node:fs / node:path tidak tersedia di runtime ini");
+  const dir = join(process.cwd(), "data");
+  return { fs, dir, file: join(dir, "analytics.json") };
 }
 
 const TABLE = "store";

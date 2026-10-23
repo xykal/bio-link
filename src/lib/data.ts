@@ -658,12 +658,13 @@ async function d1Write(store: Store): Promise<void> {
 // fs di-import dinamis: di Cloudflare Workers (workerd) filesystem tidak bisa
 // ditulis, jadi modul node:fs tidak boleh ikut ke bundle utama.
 async function dataPaths() {
-  const [{ promises: fs }, path] = await Promise.all([
-    import("node:fs"),
-    import("node:path"),
-  ]);
-  const dir = path.join(process.cwd(), "data");
-  return { fs, dir, file: path.join(dir, "store.json") };
+  const [fsMod, pathMod] = await Promise.all([import("node:fs"), import("node:path")]);
+  // Bentuk modul bisa beda antar bundler (named export vs hanya default).
+  const fs = fsMod.promises ?? fsMod.default?.promises;
+  const join = pathMod.join ?? pathMod.default?.join;
+  if (!fs || !join) throw new Error("node:fs / node:path tidak tersedia di runtime ini");
+  const dir = join(process.cwd(), "data");
+  return { fs, dir, file: join(dir, "store.json") };
 }
 
 async function ensureFile() {
