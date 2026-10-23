@@ -9,13 +9,33 @@ Migrasi dari Vercel ke **Cloudflare Workers** (adapter `@opennextjs/cloudflare` 
 | Kode + konfigurasi Worker | ✅ selesai, typecheck/build/lint hijau |
 | Uji runtime `wrangler dev` (workerd + D1 lokal) | ✅ `/`, `/api/data`, `/admin`, cron 200 |
 | CI `Build` (typecheck, lint, build, Playwright e2e) | ✅ hijau |
-| CI `Deploy Cloudflare` | ❌ gagal di step wrangler — **API token Cloudflare tidak valid** |
-| Worker live di akun Cloudflare | ⏳ belum (menunggu token) |
-| Custom domain `bio.haekal.web.id` | ⏳ belum (menunggu token / dashboard) |
+| CI `Deploy Cloudflare` (wrangler-action) | ✅ hijau, deploy `2dbae2a` |
+| **Worker live** | ✅ https://bio-link.dikanjut.workers.dev — versi `19dd6a21` |
+| Cron Trigger `15 20 * * *` | ✅ terpasang; cron manual dibalas 200 |
+| Custom domain `bio.haekal.web.id` | ⏳ **sisa satu langkah**: hapus CNAME lama ke Vercel (token belum punya izin DNS) |
 
-Produksi lama di Vercel sedang mati: `https://bio.haekal.web.id` membalas **402 DEPLOYMENT_DISABLED**.
+Verifikasi production (23 Okt 2026, worker `bio-link`, region SEA):
 
-## 1. Buat API token Cloudflare baru
+| Endpoint | Hasil |
+|---|---|
+| `GET /` | 200 — profil asli "Haekal Saputra", avatar/banner Cloudinary, header `x-opennext: 1` |
+| `GET /admin` | 200 — panel render |
+| `GET /api/data` | 200, 13.5 KB — data dari D1 `bio-link` (bukan file lokal) |
+| `POST /api/auth/login` (password benar) | 200 `{"ok":true}` + cookie `Secure; HttpOnly; SameSite=lax` |
+| `POST /api/auth/login` (password salah) | 401 |
+| `GET /api/admin/stats` (pakai cookie) | 200 — analytics asli: total 3.706 kunjungan |
+| `GET /api/cron/maintenance` + secret | 200 — `24 pengunjung lama dibersihkan; cache server dibuang` |
+| `GET /api/cron/maintenance` tanpa secret | 401 |
+
+Produksi lama di Vercel masih mati: `https://bio.haekal.web.id` membalas **402 DEPLOYMENT_DISABLED**.
+
+## 0. Yang sudah jalan tanpa langkah ini
+
+Worker, secret (6 buah), binding D1, dan Cron Trigger **sudah terpasang**. Semua endpoint produksi
+sudah lolos verifikasi di URL `*.workers.dev`. Yang tersisa hanya memindahkan domain.
+Kalau nanti perlu deploy ulang: `git push` ke `main` (CI) atau `npm run deploy`.
+
+## 1. Kalau perlu token baru (untuk DNS/D1)
 
 Dashboard → **My Profile → API Tokens → Create Token**, lalu pilih permission berikut
 (Custom token, bukan template):

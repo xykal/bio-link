@@ -2,7 +2,7 @@
 
 Halaman bio-link (ala Linktree) untuk **Haekal**, dark/light modern, dengan **panel admin lengkap** di `/admin`.
 
-**Live:** https://bio.haekal.web.id · Repo: `xykal/bio-link`
+**Live:** https://bio-link.dikanjut.workers.dev (custom domain `bio.haekal.web.id` menyusul) · Repo: `xykal/bio-link`
 
 Dibangun dengan **Next.js 16** + **React 19** + **TypeScript** + **Tailwind v4**.
 Hosting: **Cloudflare Workers** (adapter `@opennextjs/cloudflare`).
