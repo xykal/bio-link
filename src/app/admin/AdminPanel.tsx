@@ -28,6 +28,7 @@ import type {
   ProjectItem,
   ProductItem,
   ShopConfig,
+  DonationConfig,
   ProjectStatus,
   ProductKind,
 } from "@/lib/data";
@@ -341,6 +342,17 @@ export default function AdminPanel() {
     projects: true,
     shop: false,
   });
+  const [donation, setDonation] = useState<DonationConfig>({
+    enabled: false,
+    headline: "",
+    subtitle: "",
+    note: "",
+    url: "",
+    ctaLabel: "",
+    target: 0,
+    raised: 0,
+    sound: true,
+  });
   const [projDraft, setProjDraft] = useState<ProjectItem | null>(null);
   const [prodDraft, setProdDraft] = useState<ProductItem | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -526,6 +538,19 @@ export default function AdminPanel() {
       setProducts(d.products || []);
       setShop(d.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] });
       setTabs(d.tabs || { projects: true, shop: false });
+      setDonation(
+        d.donation || {
+          enabled: false,
+          headline: "",
+          subtitle: "",
+          note: "",
+          url: "",
+          ctaLabel: "",
+          target: 0,
+          raised: 0,
+          sound: true,
+        }
+      );
       setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
       setSeo(d.seo);
@@ -755,6 +780,7 @@ export default function AdminPanel() {
       if (patch.products) setProducts(d.products);
       if (patch.shop) setShop(d.shop);
       if (patch.tabs) setTabs(d.tabs);
+      if (patch.donation) setDonation(d.donation);
       flash("Tersimpan");
     } else {
       flash("Gagal menyimpan pengaturan", false);
@@ -2753,6 +2779,98 @@ export default function AdminPanel() {
 
           {view === "shop" && (
             <>
+              <Section title="Kartu Donasi" sub="Banner besar di bawah link, dengan elemen koin 3D melayang & suara koin">
+                <div className="flex flex-col gap-2">
+                  <SwitchRow
+                    label="Tampilkan kartu donasi"
+                    checked={donation.enabled}
+                    onChange={(v) => {
+                      const next = { ...donation, enabled: v };
+                      setDonation(next);
+                      void saveSettings({ donation: next });
+                    }}
+                  />
+                  <SwitchRow
+                    label="Efek suara koin saat kartu diklik"
+                    checked={donation.sound}
+                    onChange={(v) => {
+                      const next = { ...donation, sound: v };
+                      setDonation(next);
+                      void saveSettings({ donation: next });
+                    }}
+                  />
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <Field label="Judul">
+                    <input
+                      className={inputCls}
+                      value={donation.headline}
+                      onChange={(e) => setDonation({ ...donation, headline: e.target.value })}
+                      onBlur={() => saveSettings({ donation })}
+                      placeholder="Traktir Haekal Kopi"
+                    />
+                  </Field>
+                  <Field label="Link donasi" hint="Saweria, Trakteer, Ko-fi, dll">
+                    <input
+                      className={inputCls}
+                      value={donation.url}
+                      onChange={(e) => setDonation({ ...donation, url: e.target.value })}
+                      onBlur={() => saveSettings({ donation })}
+                      placeholder="https://saweria.co/…"
+                    />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Deskripsi singkat">
+                      <textarea
+                        className={inputCls}
+                        rows={2}
+                        value={donation.subtitle}
+                        onChange={(e) => setDonation({ ...donation, subtitle: e.target.value })}
+                        onBlur={() => saveSettings({ donation })}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Label tombol">
+                    <input
+                      className={inputCls}
+                      value={donation.ctaLabel}
+                      onChange={(e) => setDonation({ ...donation, ctaLabel: e.target.value })}
+                      onBlur={() => saveSettings({ donation })}
+                      placeholder="Dukung Sekarang"
+                    />
+                  </Field>
+                  <Field label="Keterangan kecil" hint="Mis. metode pembayaran">
+                    <input
+                      className={inputCls}
+                      value={donation.note}
+                      onChange={(e) => setDonation({ ...donation, note: e.target.value })}
+                      onBlur={() => saveSettings({ donation })}
+                      placeholder="Saweria · QRIS, e-wallet"
+                    />
+                  </Field>
+                  <Field label="Target donasi (Rp)" hint="0 = progress bar disembunyikan">
+                    <input
+                      type="number"
+                      min={0}
+                      className={inputCls}
+                      value={donation.target}
+                      onChange={(e) => setDonation({ ...donation, target: Number(e.target.value) || 0 })}
+                      onBlur={() => saveSettings({ donation })}
+                    />
+                  </Field>
+                  <Field label="Sudah terkumpul (Rp)" hint="Diisi manual sesuai dashboard donasi">
+                    <input
+                      type="number"
+                      min={0}
+                      className={inputCls}
+                      value={donation.raised}
+                      onChange={(e) => setDonation({ ...donation, raised: Number(e.target.value) || 0 })}
+                      onBlur={() => saveSettings({ donation })}
+                    />
+                  </Field>
+                </div>
+              </Section>
+
               <Section title="Pengaturan Shop" sub="Pembayaran otomatis lewat QRIS Pakasir">
                 <div className="flex flex-col gap-2">
                   <SwitchRow

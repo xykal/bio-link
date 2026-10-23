@@ -14,10 +14,12 @@ import type {
   ProjectItem,
   ProductItem,
   ShopConfig,
+  DonationConfig,
 } from "@/lib/data";
 import TabNav from "./TabNav";
 import ProjectGrid from "./ProjectGrid";
 import ShopGrid from "./ShopGrid";
+import DonationBanner from "./DonationBanner";
 
 export type BioView = "bio" | "project" | "shop";
 
@@ -40,6 +42,7 @@ export type PublicData = {
   projects: ProjectItem[];
   products: ProductItem[];
   shop: ShopConfig;
+  donation: DonationConfig;
   tabs: Store["tabs"];
   rulesUrl: string;
 };
@@ -194,6 +197,18 @@ function toPublic(s: Store): PublicData {
       ? (s.products || []).filter((p) => p.enabled).sort((a, b) => a.order - b.order)
       : [],
     shop: s.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] },
+    donation:
+      s.donation || {
+        enabled: false,
+        headline: "",
+        subtitle: "",
+        note: "",
+        url: "",
+        ctaLabel: "",
+        target: 0,
+        raised: 0,
+        sound: true,
+      },
     tabs: s.tabs || { projects: true, shop: false },
     rulesUrl: s.seo.rulesUrl,
   };
@@ -467,6 +482,42 @@ export default function BioPage({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-refresh ringan: begitu admin menyimpan link/project/produk/donasi,
+  // halaman yang sedang dibuka ikut berubah tanpa reload manual.
+  // - polling 20 dtk hanya saat tab kelihatan (hemat kuota D1 di HP)
+  // - langsung ambil ulang saat tab kembali fokus / browser online lagi
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      if (!alive) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // fetch diam-diam: tidak menyentuh state loading / error
+      fetch("/api/data", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: PublicData | null) => {
+          if (alive && d) {
+            setData(d);
+            setFailed(false);
+          }
+        })
+        .catch(() => {});
+    };
+    const timer = window.setInterval(refresh, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, []);
 
   const retry = useCallback(() => {
     setLoading(true);
@@ -1086,6 +1137,15 @@ export default function BioPage({
             >
               Belum ada link yang ditampilkan.
             </div>
+          )}
+
+          {/* KARTU DONASI: banner besar + elemen 3D koin melayang di luar kartu */}
+          {data?.donation?.enabled && data.donation.url && (
+            <DonationBanner
+              donation={data.donation}
+              accent={profile?.accent || "#8b5cf6"}
+              isLight={!!isLight}
+            />
           )}
 
           {/* TEAM & CONTRIBUTOR: avatar bulat sejajar */}

@@ -27,6 +27,37 @@
 
 ---
 
+### 2026-10-23 (lanjutan) - Cover project anti-gagal, auto-refresh, kartu donasi 3D
+**Status:** Done
+
+**Yang dikerjain:**
+- **Cover project tidak ada yang gagal muat lagi**: `ProjectCover` mencoba berlapis — (1) gambar dari panel admin, (2) kartu OG GitHub `/1/<owner>/<repo>`, (3) `github.com/<repo>.png`, (4) gradient + inisial. Tiap gambar gagal → `onError` pindah ke kandidat berikutnya. URL repo diambil langsung dari `repoUrl`, jadi kalau link repo diganti di panel, cover ikut pindah otomatis (tidak ada gambar yatim). Cover komponen di-`key` dengan `id|image|repoUrl` sehingga attempt reset saat data berubah.
+- **Auto-update tanpa reload**: BioPage polling `/api/data` tiap 20 detik (hanya saat tab terlihat) + refetch saat tab kembali fokus / `online`. Jadi begitu admin menyimpan link, project, produk, atau donasi, halaman yang sedang dibuka ikut berubah.
+- **Kartu donasi baru** (`src/components/DonationBanner.tsx`): banner besar di bawah link, gradien emas→ungu, CTA "Dukung Sekarang", progress bar opsional (target & terkumpul diisi dari panel), plus badge status. Elemen 3D (tumpukan koin + koin tunggal) **melayang di luar kartu** dengan animasi float, twinkle, dan pop saat diklik. Ada **efek suara koin** dibuat pakai WebAudio (3 "tink" segitiga, tanpa file audio) + tombol mute. Menghormati `prefers-reduced-motion`.
+- Aset koin 3D dibuat lewat image-gen lalu dibersihkan manual (background dibuang, crop, WebP): `public/donation-coins.webp` (95 KB) & `public/donation-coin.webp` (8 KB).
+- Data: `DonationConfig` di `src/lib/data.ts` + `normalize()` (URL wajib lolos `isAllowedLinkUrl`), PATCH `/api/admin/settings` menerima `donation`, `/api/data` meneruskannya, panel admin dapat section **Kartu Donasi** (aktif, judul, subjudul, link, label tombol, keterangan, target, terkumpul, suara).
+- Animasi dipindah dari `styled-jsx` ke `<style>` biasa supaya ikut ter-render di server (styled-jsx hanya inject saat hydration → kartu sempat diam).
+
+**File yang diubah/dibuat:**
+- `src/components/DonationBanner.tsx` (baru), `src/components/ProjectGrid.tsx`, `src/components/BioPage.tsx`
+- `src/lib/data.ts`, `src/app/api/data/route.ts`, `src/app/api/admin/settings/route.ts`, `src/app/admin/AdminPanel.tsx`
+- `public/donation-coins.webp`, `public/donation-coin.webp` (baru)
+
+**Kendala & Solusi:**
+- Gambar hasil generate punya background kotak-kotak/green-screen → dihapus semi-otomatis (numpy + scipy: ambang warna, despill, hapus komponen kecil, crop, WebP).
+- `npm run build` sempat `exit 137` (OOM) karena proses `wrangler dev` masih hidup — matikan dulu sebelum build.
+- Kartu donasi butuh ruang untuk elemen melayang → wrapper diberi `mt-14` dan offset negatif dijaga agar tidak menutupi link di atasnya.
+
+**Build & Release:**
+- `tsc --noEmit` + `eslint src` bersih; `npm run build` & `opennextjs-cloudflare build` sukses.
+- Uji `wrangler dev`: `/`, `/project`, `/shop`, kedua aset WebP = 200; HTML SSR sudah memuat animasi (`donFloatA`) dan gambar.
+
+**Next Step:**
+- Isi target/terkumpul donasi dari panel kalau mau progress bar-nya tampil.
+- Ganti link donasi kalau bukan Saweria `saweria.co/kallsptra`.
+
+---
+
 ### 2026-10-23 - Tab Project & Shop + Checkout Pakasir + SEO lengkap
 **Status:** Done (kecuali kredensial Pakasir produksi — lihat Next Step)
 

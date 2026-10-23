@@ -60,6 +60,10 @@ export async function PATCH(req: Request) {
     const merged = normalize({ shop: { ...store.shop, ...body.shop } });
     store.shop = merged.shop;
   }
+  if (body.donation && typeof body.donation === "object") {
+    const merged = normalize({ donation: { ...store.donation, ...body.donation } });
+    store.donation = merged.donation;
+  }
   if (body.tabs && typeof body.tabs === "object") {
     store.tabs = {
       projects: body.tabs.projects !== false,

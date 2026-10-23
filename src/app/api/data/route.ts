@@ -31,6 +31,7 @@ export async function GET() {
         ? s.products.filter((p) => p.enabled).sort((a, b) => a.order - b.order)
         : [],
       shop: { ...s.shop, payReady: pakasirConfigured },
+      donation: s.donation,
       tabs: s.tabs,
       rulesUrl: s.seo.rulesUrl,
     },

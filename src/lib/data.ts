@@ -287,6 +287,7 @@ export type Store = {
   products: ProductItem[];
   shop: ShopConfig;
   tabs: NavTabs;
+  donation: DonationConfig;
   maintenance: MaintenanceConfig & { log: MaintenanceLogEntry[] };
 };
 
@@ -331,6 +332,19 @@ export type ShopConfig = {
   methods: string[]; // metode pembayaran Pakasir, mis. ["qris"]
   /** Hanya dikirim ke client (runtime), tidak disimpan: true kalau kredensial Pakasir ada. */
   payReady?: boolean;
+};
+
+// Kartu banner donasi di bawah link. Url ke platform donasi (Saweria/Trakteer/dll).
+export type DonationConfig = {
+  enabled: boolean;
+  headline: string;
+  subtitle: string;
+  note: string;
+  url: string;
+  ctaLabel: string;
+  target: number; // 0 = progress bar disembunyikan
+  raised: number;
+  sound: boolean; // efek suara koin saat kartu diklik
 };
 
 // Tab yang tampil di halaman publik (Bio selalu ada).
@@ -579,6 +593,18 @@ const DEFAULT_STORE: Store = {
     methods: ["qris"],
   },
   tabs: { projects: true, shop: false },
+  donation: {
+    enabled: true,
+    headline: "Traktir Haekal Kopi",
+    subtitle:
+      "Bantu biaya server XyCloud & waktu ngoding project open-source. Sekecil apa pun tetap kepake.",
+    note: "Saweria · QRIS, e-wallet, pulsa",
+    url: "https://saweria.co/kallsptra",
+    ctaLabel: "Dukung Sekarang",
+    target: 0,
+    raised: 0,
+    sound: true,
+  },
   maintenance: { autoEnabled: true, retentionDays: 30, log: [] },
 };
 
@@ -810,6 +836,35 @@ export function normalize(parsed: Partial<Store>): Store {
       methods: Array.isArray(parsed.shop?.methods)
         ? parsed.shop!.methods.filter((m): m is string => SHOP_METHODS.includes(m)).slice(0, 5)
         : d.shop.methods,
+    },
+    donation: {
+      enabled: parsed.donation?.enabled === true,
+      headline:
+        typeof parsed.donation?.headline === "string" && parsed.donation.headline.trim()
+          ? parsed.donation.headline.trim().slice(0, 60)
+          : d.donation.headline,
+      subtitle:
+        typeof parsed.donation?.subtitle === "string"
+          ? parsed.donation.subtitle.slice(0, 220)
+          : d.donation.subtitle,
+      note: typeof parsed.donation?.note === "string" ? parsed.donation.note.slice(0, 80) : "",
+      url:
+        typeof parsed.donation?.url === "string" && isAllowedLinkUrl(parsed.donation.url)
+          ? parsed.donation.url.slice(0, 500)
+          : "",
+      ctaLabel:
+        typeof parsed.donation?.ctaLabel === "string" && parsed.donation.ctaLabel.trim()
+          ? parsed.donation.ctaLabel.trim().slice(0, 32)
+          : d.donation.ctaLabel,
+      target:
+        typeof parsed.donation?.target === "number" && Number.isFinite(parsed.donation.target)
+          ? Math.max(0, Math.round(parsed.donation.target))
+          : 0,
+      raised:
+        typeof parsed.donation?.raised === "number" && Number.isFinite(parsed.donation.raised)
+          ? Math.max(0, Math.round(parsed.donation.raised))
+          : 0,
+      sound: parsed.donation?.sound !== false,
     },
     tabs: {
       projects: parsed.tabs?.projects !== false,
