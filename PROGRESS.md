@@ -47,9 +47,15 @@
 - `src/lib/data.ts` (SeoConfig + seed + normalize), `src/app/page.tsx`, `src/app/project/page.tsx`,
   `src/app/shop/page.tsx`, `src/app/admin/AdminPanel.tsx`, `src/app/api/auth/login/route.ts`.
 
+**Status produksi (terverifikasi):**
+- Worker secret `ADMIN_PASSWORD` = `0099` sudah dipasang; login `POST /api/auth/login` -> 200, sesi `authenticated: true`.
+- Meta keywords (16 kata kunci) + canonical + JSON-LD `knowsAbout` sudah tampil di beranda, `/project`, `/shop`.
+- Label layar login diubah jadi "PIN Admin" + `inputMode="numeric"` (keypad angka di HP).
+
 **Next Step:**
-- Set Worker secret `ADMIN_PASSWORD=0099` (dilakukan di sesi ini) — kalau nanti mau lebih aman, ganti ke PIN 6 digit.
-- Submit `https://bio.haekal.web.id/sitemap.xml` di Google Search Console (butuh akun Google pemilik domain).
+- **Submit sitemap** `https://bio.haekal.web.id/sitemap.xml` di Google Search Console (butuh login akun Google pemilik domain — tidak bisa dilakukan agent).
+- Tempel token verifikasi GSC di panel → Tampilan & SEO → "Google Search Console" (kalau verifikasi pakai meta tag, bukan DNS).
+- PIN 4 digit itu praktis secara keamanan cuma kalau limiter global aktif; kalau mau lebih tenang, naikkan ke 6 digit kapan saja via `wrangler secret put ADMIN_PASSWORD`.
 
 ---
 
