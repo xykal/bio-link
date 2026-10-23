@@ -27,6 +27,57 @@
 
 ---
 
+### 2026-10-23 (lanjutan 7) - Insiden 429: kuota Workers akun habis
+**Status:** Tertangani (sementara), perlu upgrade/optimasi lanjutan
+
+**Gejala:** semua route `bio.haekal.web.id` balas **429 "This website has been
+temporarily rate limited"** (halaman Cloudflare, bukan 5xx aplikasi).
+
+**Penyebab (bukan bug kode):** limit free plan Workers = **100.000 request/hari
+per AKUN**, dibagi semua Worker. Pemakaian 23 Okt (Cloudflare GraphQL
+`workersInvocationsAdaptive`):
+
+| Worker | Request |
+|---|---|
+| xydesk-remote-web | 121.822 |
+| rdpfree-next | 2.664 |
+| nyawit-live | 1.399 |
+| bio-link | 1.282 |
+| xycloud-api | 1.178 |
+| dlaja-web + dlaja-dash | 1.090 |
+| lain-lain | ±600 |
+| **TOTAL** | **130.023 / 100.000** |
+
+Jadi bio-link cuma 1% pemakaian; 94% dari `xydesk-remote-web` (landing-nya
+polling `/api/active-sessions` tiap **10 detik** → 8.640 req/hari per tab yang
+dibiarkan terbuka).
+
+**Yang dikerjakan:**
+1. **Halaman darurat statis** (`emergency-site/`, Pages project
+   `bio-link-emergency`): profil + link + 7 project + donasi, semua inline,
+   **0 request Worker**. Domain dialihkan: Worker custom domain dilepas, CNAME
+   `bio` → `bio-link-emergency.pages.dev`. Live, 200, ±154 KB.
+2. **Rem darurat** `scripts/emergency-static.sh on|off` — satu perintah untuk
+   pindah domain Pages <-> Worker.
+3. **Hemat kuota di bio-link** (commit `41b1dd2`): polling data 20 dtk → 90 dtk
+   + berhenti otomatis setelah tab 10 menit tanpa interaksi; prefetch RSC
+   dimatikan di tab nav & kartu project (tiap prefetch = 1 request Worker).
+4. **Hemat kuota di XyDesk-Remote** (commit `6ab51a2`, sudah **deploy** ke
+   Worker `xydesk-remote-web`): polling active-sessions 10 dtk → 60 dtk +
+   berhenti total kalau tab menganggur >5 menit (hidup lagi saat disentuh).
+   Perkiraan turun ±6x: 121k → ±20k/hari.
+
+**Penting:** perubahan #3 sudah di GitHub tapi **belum di-push** ulang setelah
+domain dialihkan — push ke `main` memicu `Deploy Cloudflare` yang memasang lagi
+custom domain `bio.haekal.web.id` ke Worker dan **menendang halaman darurat**.
+Urutan aman setelah kuota reset (00:00 UTC): jalankan
+`bash scripts/emergency-static.sh off`, baru push.
+
+**Sisa:** kalau pemakaian tetap >100k/hari, satu-satunya solusi tuntas adalah
+Workers **Paid ($5/bln, 10 juta req/bulan, tanpa limit harian)**.
+
+---
+
 ### 2026-10-23 (lanjutan 6) - Screenshot ASLI via emulator Android di GitHub Actions
 **Status:** Done
 
