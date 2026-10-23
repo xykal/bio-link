@@ -27,6 +27,41 @@
 
 ---
 
+### 2026-10-23 (lanjutan 6) - Screenshot ASLI via emulator Android di GitHub Actions
+**Status:** Done
+
+**Cara kerjanya (repo publik xykal/bio-link):**
+- Workflow baru `.github/workflows/screenshots.yml` — `workflow_dispatch`, runner `ubuntu-latest` (KVM aktif),
+  `reactivecircus/android-emulator-runner@v2` (API 34, google_apis, x86_64, pixel_6, `-gpu swiftshader_indirect`).
+- `scripts/fetch-apks.sh` mengunduh **APK x86_64** dari release GitHub:
+  AppPerms v1.8.0, DLAja/XyDownloader v1.3.5, kilat-motion v1.21.0, NyawitLive v5.0.0 (universal).
+- `scripts/emulator-shots.sh` men-set status bar demo (jam 12:00, baterai 100%, tanpa notifikasi),
+  install + launch tiap app, lalu ambil screenshot **hanya** kalau paket app masih foreground
+  (`dumpsys window`), plus tap terarah lewat `uiautomator` (bukan koordinat tebakan) ke tab/menu asli.
+- `scripts/shots-commit.sh` mengubah PNG 1080×2400 jadi WebP 720px (±12-45 KB), menghapus set lama,
+  lalu **commit + push sendiri** ke `main` (pakai `GITHUB_TOKEN`, `git add` dulu baru cek diff).
+
+**Hasil (run nyata, 8-9 menit):**
+- `public/shots/` berisi 8 file WebP: `kilat-1..3` (onboarding + dashboard Fluxa), `dlaja-1` (layar utama
+  DownloadAja) `dlaja-3` (Pengaturan), `appperms-1` (kemampuan + status Shizuku), `dlaja-2`.
+- Dipasang ke data produksi lewat PATCH admin: kilat-motion 3 shot, dlaja-xydownloader 2, appperms 1.
+- Terverifikasi live: gambar tampil di `/project/kilat-motion` dan masuk `screenshot` di JSON-LD.
+
+**Kendala & solusi (dicatat biar tidak diulang):**
+- Log pertama: `convert: command not found` -> ImageMagick dipasang di step awal workflow.
+- Commit step tidak jalan karena `git diff` tidak melihat file baru -> `git add` dulu, cek `git diff --cached`.
+- Screenshot pertama tertutup dialog "Pixel Launcher isn't responding" -> `settings put global hide_error_dialogs 1`.
+- Swipe buta membuka app drawer (bukan konten app) -> screenshot diverifikasi lewat foreground package,
+  interaksi pakai tap berbasis teks.
+- Nyawit Live (Unity) hanya menghasilkan layar "Viewing full screen" -> tidak dipakai, gallery dibiarkan kosong.
+
+**Next Step:**
+- Screenshot untuk project web (XyDesk Remote, XyCloudStore) bisa diambil dengan Playwright shot
+  workflow serupa kalau mau; XyRDP tidak punya UI (CLI/agent).
+- Jalankan workflow `Screenshots (Emulator)` manual kalau app di-update (rilis baru) — screenshot lama otomatis diganti.
+
+---
+
 ### 2026-10-23 (lanjutan 5) - Konten detail project + chip stack berlogo
 **Status:** Done
 
