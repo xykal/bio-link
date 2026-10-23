@@ -6,6 +6,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Origin tidak diizinkan" }, { status: 403 });
   }
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(clearSessionCookie());
+  res.cookies.set(clearSessionCookie(req));
   return res;
 }

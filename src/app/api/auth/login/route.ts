@@ -30,6 +30,6 @@ export async function POST(req: Request) {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(createSessionCookie());
+  response.cookies.set(createSessionCookie(req));
   return response;
 }

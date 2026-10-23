@@ -8,7 +8,6 @@
 //      (`/api/cron/maintenance`) lewat WORKER_SELF_REFERENCE — bukan import
 //      langsung, supaya logika + cek CRON_SECRET tetap satu jalur.
 
-// @ts-ignore `.open-next/worker.js` baru ada setelah `opennextjs-cloudflare build`
 import { default as handler } from "./.open-next/worker.js";
 
 type CronEnv = {

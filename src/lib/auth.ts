@@ -61,7 +61,23 @@ export async function isAuthenticated(): Promise<boolean> {
   }
 }
 
-export function createSessionCookie() {
+// Cookie sesi harus `Secure` saat trafiknya HTTPS (production di Cloudflare
+// selalu begitu, x-forwarded-proto=https). Dulu nilainya murni dari NODE_ENV,
+// efeknya sesi tidak pernah tersimpan saat e2e CI berjalan di http://127.0.0.1
+// (browser membuang cookie Secure di origin non-HTTPS) sehingga /api/admin/*
+// selalu 401 walau login sukses.
+function requestIsHttps(req?: Request): boolean {
+  if (!req) return isProduction;
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (proto) return proto === "https";
+  try {
+    return new URL(req.url).protocol === "https:";
+  } catch {
+    return isProduction;
+  }
+}
+
+export function createSessionCookie(req?: Request) {
   if (!authConfigured()) throw new Error("Admin authentication is not configured");
   const expiry = Buffer.from(
     String(Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS)
@@ -73,11 +89,11 @@ export function createSessionCookie() {
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
-    secure: isProduction,
+    secure: requestIsHttps(req),
   };
 }
 
-export function clearSessionCookie() {
+export function clearSessionCookie(req?: Request) {
   return {
     name: SESSION_COOKIE,
     value: "",
@@ -85,7 +101,7 @@ export function clearSessionCookie() {
     sameSite: "lax" as const,
     path: "/",
     maxAge: 0,
-    secure: isProduction,
+    secure: requestIsHttps(req),
   };
 }
 
