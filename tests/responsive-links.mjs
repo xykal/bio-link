@@ -97,7 +97,8 @@ try {
   await page.unroute("**/api/data");
   await page.setViewportSize(viewports[0]);
   await page.goto(`${base}/admin`, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Password").fill(process.env.ADMIN_PASSWORD || "0099");
+  // Label di panel admin sudah diganti jadi "PIN Admin" sejak PIN 4 digit dipakai.
+  await page.getByLabel("PIN Admin").fill(process.env.ADMIN_PASSWORD || "0099");
   await page.getByRole("button", { name: "Masuk" }).click();
   await page.getByText("Bio Link Admin").waitFor({ timeout: 10_000 });
   await page.getByRole("button", { name: "Buka menu" }).click();
