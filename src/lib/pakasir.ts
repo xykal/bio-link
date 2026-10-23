@@ -87,3 +87,14 @@ export async function transactionStatus(
   }
   return { status: "unknown", raw: json };
 }
+
+/**
+ * Tempelkan status "pembayaran siap" ke config shop sebelum dikirim ke client.
+ * Dipakai halaman server (bio/project/shop) supaya SSR tidak sempat menampilkan
+ * tombol beli yang ujung-ujungnya 503 saat kredensial belum dipasang.
+ */
+export function withPayReady<T extends { shop: ShapelessShop }>(store: T): T {
+  return { ...store, shop: { ...store.shop, payReady: pakasirConfigured } };
+}
+
+type ShapelessShop = { [key: string]: unknown };

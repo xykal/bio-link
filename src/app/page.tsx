@@ -3,6 +3,7 @@ import { cache } from "react";
 import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
+import { withPayReady } from "@/lib/pakasir";
 
 // SSR di edge Cloudflare. Dulu di Vercel halaman ini ISR 2 menit karena compute
 // Hobby ada di AS; sekarang render terjadi di POP terdekat pemilik request dan
@@ -79,7 +80,8 @@ const personJsonLd = (store: Awaited<ReturnType<typeof getStore>>) => ({
 });
 
 export default async function Home() {
-  const initial = await getStore();
+  const raw = await getStore();
+  const initial = raw ? withPayReady(raw) : null;
   // Ring story abu tidak lagi dibaca dari cookie saat SSR: halaman kini
   // di-cache di edge (sama untuk semua orang). BioPage sudah mengambil
   // status dilihat dari localStorage + /api/data sejak awal di client.

@@ -2785,12 +2785,21 @@ export default function AdminPanel() {
                     />
                   </Field>
                 </div>
-                <p className="mt-3 text-xs text-white/35">
-                  Metode pembayaran: QRIS (Pakasir project <b>{`${
-                    shop.enabled ? "aktif" : "nonaktif"
-                  }`}</b>). Kredensial PAKASIR_PROJECT &amp; PAKASIR_API_KEY diset sebagai Worker secret,
-                  bukan di panel.
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span
+                    className={`rounded-full border px-2.5 py-1 font-semibold ${
+                      shop.payReady
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                        : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                    }`}
+                  >
+                    {shop.payReady ? "Kredensial Pakasir terpasang" : "Kredensial Pakasir belum diset"}
+                  </span>
+                  <span className="text-white/35">
+                    Metode: QRIS. PAKASIR_PROJECT &amp; PAKASIR_API_KEY diset sebagai Worker secret
+                    (<code className="text-white/50">npx wrangler secret put</code>), bukan di panel.
+                  </span>
+                </div>
               </Section>
 
               <Section

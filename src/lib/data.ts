@@ -329,6 +329,8 @@ export type ShopConfig = {
   headline: string;
   note: string;
   methods: string[]; // metode pembayaran Pakasir, mis. ["qris"]
+  /** Hanya dikirim ke client (runtime), tidak disimpan: true kalau kredensial Pakasir ada. */
+  payReady?: boolean;
 };
 
 // Tab yang tampil di halaman publik (Bio selalu ada).
@@ -475,7 +477,7 @@ const DEFAULT_STORE: Store = {
       title: "XyDesk Remote",
       description:
         "Remote desktop Windows langsung dari browser — sesi RDP nyala dalam hitungan detik tanpa pasang aplikasi.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/XyDesk-Remote",
       stack: ["Next.js", "TypeScript", "Tailscale"],
       status: "live",
       demoUrl: "https://rdp.xydesk.my.id",
@@ -489,7 +491,7 @@ const DEFAULT_STORE: Store = {
       title: "AppPerms",
       description:
         "Kelola izin aplikasi Android & display-over-other-apps lewat Shizuku, tanpa root dan tanpa ribet ADB.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/AppPerms",
       stack: ["Kotlin", "Android", "Shizuku"],
       status: "live",
       demoUrl: "https://appsperms.xyverse.my.id/",
@@ -503,7 +505,7 @@ const DEFAULT_STORE: Store = {
       title: "DLAja · XyDownloader",
       description:
         "Downloader TikTok: video tanpa watermark, MP3, slide foto, sampai Live Photo — ringan dan offline-first.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/XyDownloader",
       stack: ["Kotlin", "Jetpack Compose"],
       status: "live",
       demoUrl: "https://dlaja.xyverse.my.id",
@@ -517,7 +519,7 @@ const DEFAULT_STORE: Store = {
       title: "Nyawit Live",
       description:
         "Game 3D multiplayer bertema perkebunan sawit & haulage canter, dibangun dengan engine native buatan sendiri.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/nyawit-live",
       stack: ["C#", "Unity", "Multiplayer"],
       status: "beta",
       demoUrl: "https://nyawit.xyverse.my.id",
@@ -531,7 +533,7 @@ const DEFAULT_STORE: Store = {
       title: "XyRDP",
       description:
         "Windows RDP 6 jam gratis lewat GitHub Actions + Tailscale, tinggal fork dan jalankan workflow.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/XyRDP",
       stack: ["PowerShell", "GitHub Actions", "Tailscale"],
       status: "live",
       demoUrl: "",
@@ -545,7 +547,7 @@ const DEFAULT_STORE: Store = {
       title: "XyCloudStore",
       description:
         "Sewa PC cloud, toko akun digital, CS realtime, dan dompet dalam satu tempat.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/XyCloudStore",
       stack: ["Next.js", "Cloudflare", "Midtrans"],
       status: "live",
       demoUrl: "https://xycloud.my.id",
@@ -559,7 +561,7 @@ const DEFAULT_STORE: Store = {
       title: "kilat-motion",
       description:
         "Editor motion graphics native Android untuk bikin animasi & video jedag-jedug tanpa watermark.",
-      image: "",
+      image: "https://opengraph.githubassets.com/1/xykal/kilat-motion",
       stack: ["Kotlin", "Android", "Canvas"],
       status: "beta",
       demoUrl: "",

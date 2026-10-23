@@ -57,6 +57,11 @@
 - `npm run build` + `npx opennextjs-cloudflare build` bersih; `tsc --noEmit` & `eslint src` tanpa error/warning.
 - Uji lokal `wrangler dev`: `/`, `/project`, `/shop`, `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest` = 200; PATCH settings via login admin mengaktifkan tab shop dan sitemap ikut menambah `/shop`; order tanpa kredensial dibalas 503 dengan pesan jelas.
 
+**Update (keputusan pemilik):**
+- Cover project otomatis diisi kartu OG GitHub (`https://opengraph.githubassets.com/1/xykal/<repo>`) untuk 7 project seed — bisa diganti kapan saja dari panel.
+- Tab Shop dinyalakan walau kredensial Pakasir belum ada; UI jujur: tombol beli berubah jadi "Segera Aktif" + badge "Pembayaran QRIS sedang disiapkan" (`shop.payReady` dikirim dari server, bukan disimpan di DB).
+- Panel admin Shop menampilkan status kredensial Pakasir (terpasang / belum).
+
 **Next Step:**
 - Set Worker secret `PAKASIR_PROJECT` dan `PAKASIR_API_KEY` (`npx wrangler secret put ...`) lalu uji `POST https://app.pakasir.com/api/paymentsimulation`.
 - Isi produk asli + cover project dari panel admin, lalu submit sitemap ke Google Search Console.

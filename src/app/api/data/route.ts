@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { pakasirConfigured } from "@/lib/pakasir";
 import { readStore } from "@/lib/data";
 
 // Data publik buat halaman bio. Rute ini pernah ada di deploy lama tapi hilang
@@ -29,7 +30,7 @@ export async function GET() {
       products: s.shop.enabled
         ? s.products.filter((p) => p.enabled).sort((a, b) => a.order - b.order)
         : [],
-      shop: s.shop,
+      shop: { ...s.shop, payReady: pakasirConfigured },
       tabs: s.tabs,
       rulesUrl: s.seo.rulesUrl,
     },

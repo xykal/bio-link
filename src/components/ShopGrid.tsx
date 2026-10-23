@@ -43,6 +43,9 @@ export default function ShopGrid({
   const [order, setOrder] = useState<OrderResult | null>(null);
   const [status, setStatus] = useState<string>("");
 
+  // payReady === false -> kredensial Pakasir belum dipasang di Worker.
+  const payReady = shop.payReady !== false;
+
   const items = useMemo(
     () => products.slice().sort((a, b) => a.order - b.order),
     [products]
@@ -68,6 +71,10 @@ export default function ShopGrid({
 
   async function submit() {
     if (!active) return;
+    if (!payReady) {
+      setError("Pembayaran belum aktif. Coba lagi nanti ya.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -116,6 +123,18 @@ export default function ShopGrid({
       <p className={`text-center text-[12.5px] leading-relaxed ${isLight ? "text-black/60" : "text-white/55"}`}>
         {shop.note}
       </p>
+
+      {payReady === false && (
+        <p
+          className={`mx-auto mt-3 w-fit rounded-full border px-3 py-1 text-[11.5px] font-semibold ${
+            isLight
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
+              : "border-amber-400/30 bg-amber-400/10 text-amber-300"
+          }`}
+        >
+          Pembayaran QRIS sedang disiapkan — tombol beli aktif setelahnya.
+        </p>
+      )}
 
       {items.length === 0 ? (
         <p
@@ -181,7 +200,7 @@ export default function ShopGrid({
                   )}
                   <button
                     type="button"
-                    disabled={soldOut}
+                    disabled={soldOut || !payReady}
                     onClick={() => {
                       setActive(p);
                       setOrder(null);
@@ -191,7 +210,7 @@ export default function ShopGrid({
                     className="mt-3 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: "#8b5cf6" }}
                   >
-                    {soldOut ? "Stok Habis" : "Beli Sekarang"}
+                    {soldOut ? "Stok Habis" : payReady ? "Beli Sekarang" : "Segera Aktif"}
                   </button>
                 </div>
               </article>
