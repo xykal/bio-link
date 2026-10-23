@@ -11,6 +11,9 @@ name: Emergency Restore
 
 on:
   schedule:
+    # reset kuota Workers = 00:00 UTC -> di jam itu cek tiap 5 menit biar
+    # situs balik secepat mungkin, selebihnya cukup tiap 20 menit.
+    - cron: "*/5 0 * * *"
     - cron: "*/20 * * * *"
   workflow_dispatch:
 
