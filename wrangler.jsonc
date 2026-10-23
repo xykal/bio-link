@@ -27,10 +27,15 @@
   "triggers": {
     "crons": ["15 20 * * *"]
   },
-  "routes": [
-    {
-      "pattern": "bio.haekal.web.id",
-      "custom_domain": true
-    }
-  ]
+  // Custom domain sengaja TIDAK dipasang di sini dulu: record DNS lama
+  // (CNAME ke Vercel) di zone haekal.web.id masih ada, dan selama itu
+  // `wrangler deploy` gagal di langkah trigger (error 100117) sehingga deploy
+  // di CI ikut merah. Setelah record lama dihapus, tambahkan custom domain
+  // sekali lewat Dashboard (Workers & Pages -> bio-link -> Settings ->
+  // Domains & Routes -> Add custom domain) atau hidupkan blok berikut:
+  //
+  // "routes": [
+  //   { "pattern": "bio.haekal.web.id", "custom_domain": true }
+  // ],
+  "workers_dev": true
 }
