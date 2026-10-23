@@ -46,3 +46,7 @@ jobs:
           process.exit(1);
           NODE
           npm run test:responsive
+
+      - name: Server log (diagnostik)
+        if: always()
+        run: cat /tmp/bio-link-next.log || true
