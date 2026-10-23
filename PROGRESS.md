@@ -27,6 +27,47 @@
 
 ---
 
+### 2026-10-23 (lanjutan 4) - Halaman detail per project (SEO long-tail)
+**Status:** Done
+
+**Kenapa:** satu halaman daftar panjang sulit ranking untuk nama project spesifik. Sekarang tiap project
+punya URL sendiri, judul & deskripsi sendiri, jadi 1 project = 1 peluang muncul di Google.
+
+**Yang dikerjain:**
+- **Route baru `/project/[slug]`** — 7 halaman live: `/project/xydesk-remote`, `/project/appperms`,
+  `/project/dlaja-xydownloader`, `/project/nyawit-live`, `/project/xyrdp`, `/project/xycloudstore`,
+  `/project/kilat-motion`. Slug ngawur -> **404** (tidak ada soft-404 yang bikin Google bingung).
+- **Isi halaman**: breadcrumb Bio/Project/judul, hero cover, badge status, deskripsi, chip tech stack,
+  tombol Demo + Repo, dan 3 kartu "Project lainnya" (internal linking, bagus buat crawl).
+- **Slug otomatis + bisa diubah**: `slugify()` di `src/lib/slug.ts`; `normalize()` mengisi slug yang kosong
+  dari judul dan men-dedupe (`-2`, `-3`) sehingga data lama otomatis dapat slug tanpa migrasi manual.
+  Kolom **Slug URL** ditambahkan di panel admin, dan daftar project menampilkan `/project/<slug>`.
+- **URL lama berbasis id tetap dilayani** (`findProject` fallback ke `id`) supaya tidak ada link mati.
+- **SEO per halaman**: canonical sendiri, `og:image` = cover project (URL absolut), keywords gabungan
+  (nama project + tech stack + kata kunci panel), JSON-LD `SoftwareApplication` (repo, demo, author, harga 0)
+  + `BreadcrumbList` 3 level.
+- **Sitemap** ikut memuat ke-7 URL detail (total 10 URL), **kartu di /project** sekarang nge-link ke detail
+  (cover + judul + tombol "Detail").
+- **Data produksi dirapikan**: cover yang tersimpan di D1 masih menunjuk `opengraph.githubassets.com`
+  (nilai lama) -> dimigrasi ke `/covers/*.webp` via PATCH admin, jadi `og:image` sekarang ikut lokal.
+
+**File baru/diubah:**
+- baru: `src/lib/slug.ts`, `src/app/project/[slug]/page.tsx`
+- diubah: `src/lib/data.ts` (tipe+seed+normalize), `src/components/ProjectGrid.tsx`, `src/app/sitemap.ts`,
+  `src/app/admin/AdminPanel.tsx`
+
+**Verifikasi produksi:**
+- 7/7 detail page 200 dengan `<title>` masing-masing, `/project/tidak-ada` = 404.
+- `sitemap.xml` = 10 `<loc>` (beranda, /project, 7 detail, /shop).
+- Detail page: canonical, `og:image` lokal (`https://bio.haekal.web.id/covers/AppPerms.webp`),
+  JSON-LD `SoftwareApplication` + `BreadcrumbList` (Bio > Project > AppPerms).
+
+**Next Step:**
+- Isi deskripsi project lebih panjang di panel (2-4 paragraf + fitur) supaya tiap halaman detail punya
+  konten yang benar-benar cukup untuk ranking, bukan cuma 1 baris.
+
+---
+
 ### 2026-10-23 (lanjutan 3) - SEO siap indeks + kata kunci + PIN admin
 **Status:** Done
 
