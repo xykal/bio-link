@@ -1206,15 +1206,16 @@ export default function AdminPanel() {
               <Icon name="lock" className="h-7 w-7" />
             </div>
             <h1 className="mt-4 text-xl font-bold text-white">Panel Admin</h1>
-            <p className="mt-1 text-sm text-white/50">Masukkan password admin</p>
+            <p className="mt-1 text-sm text-white/50">Masukkan PIN / password admin</p>
           </div>
 
           <label htmlFor="admin-password" className="text-xs font-medium uppercase tracking-wider text-white/45">
-            Password
+            PIN Admin
           </label>
           <input
             id="admin-password"
             type="password"
+            inputMode="numeric"
             autoComplete="current-password"
             autoCapitalize="none"
             spellCheck={false}
@@ -1224,7 +1225,7 @@ export default function AdminPanel() {
             value={adminPassword}
             onChange={(e) => setAdminPassword(e.target.value)}
             className={inputCls + " mt-1.5"}
-            placeholder="Gunakan passphrase yang kuat"
+            placeholder="••••"
           />
           {loginError && (
             <p className="mt-3 flex items-center gap-2 text-sm text-rose-400" role="alert">
