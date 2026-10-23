@@ -39,6 +39,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Pasang ImageMagick
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick webp
+
       - name: Unduh APK
         run: bash scripts/fetch-apks.sh
 

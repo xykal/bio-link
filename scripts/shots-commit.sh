@@ -6,6 +6,12 @@ RAW="raw-shots"
 OUT="public/shots"
 mkdir -p "$OUT"
 
+# ImageMagick belum tentu ada di runner -> pasang kalau perlu.
+if ! command -v convert >/dev/null 2>&1; then
+  echo "Memasang ImageMagick…"
+  sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick webp
+fi
+
 shopt -s nullglob
 files=("$RAW"/*.png)
 if [ ${#files[@]} -eq 0 ]; then
