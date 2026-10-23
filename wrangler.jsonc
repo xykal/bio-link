@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bio-link",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "bio-link"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bio-link",
+      "database_id": "7ba20cf2-1b91-40f2-94c2-a69d5e249143"
+    }
+  ],
+  "triggers": {
+    "crons": ["15 20 * * *"]
+  },
+  "routes": [
+    {
+      "pattern": "bio.haekal.web.id",
+      "custom_domain": true
+    }
+  ]
+}

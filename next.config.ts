@@ -26,3 +26,8 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// Aktifkan binding Cloudflare (D1, dsb) saat `next dev` lokal.
+// Kalau tidak dipanggil, getCloudflareContext() tidak tersedia di dev.
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+initOpenNextCloudflareForDev();

@@ -1,0 +1,8 @@
+# Copy to .dev.vars for `npm run preview` / `next dev` with bindings.
+# NEVER commit real values.
+ADMIN_PASSWORD=
+SESSION_SECRET=
+CRON_SECRET=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=

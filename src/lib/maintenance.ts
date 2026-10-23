@@ -3,14 +3,13 @@ import {
   writeStore,
   pruneExpiredStories,
   destroyStoryMedia,
-  useD1,
   type MaintenanceLogEntry,
   type MaintenanceTrigger,
   type Store,
 } from "./data";
 import { getAnalytics, analyticsSize, pruneAnalytics, serverInfo } from "./analytics";
 import { cacheStats, cacheInvalidate } from "./storecache";
-import { d1Query } from "./d1";
+import { d1Available, d1Query } from "./d1";
 
 // ===========================================================================
 //  Perawatan server — dipakai menu "Perawatan" di panel admin & cron Vercel.
@@ -19,7 +18,7 @@ import { d1Query } from "./d1";
 // ===========================================================================
 
 export async function pingD1(): Promise<{ ok: boolean; ms: number; error?: string }> {
-  if (!useD1) return { ok: false, ms: 0, error: "D1 tidak dikonfigurasi (mode file lokal)" };
+  if (!d1Available()) return { ok: false, ms: 0, error: "D1 tidak dikonfigurasi (mode file lokal)" };
   const t0 = Date.now();
   try {
     await d1Query("SELECT 1 AS ok");
@@ -138,7 +137,7 @@ export async function getDiagnostics() {
   return {
     time: new Date().toISOString(),
     storage: {
-      mode: useD1 ? "Cloudflare D1" : "file lokal (dev)",
+      mode: d1Available() ? "Cloudflare D1" : "file lokal (dev)",
       d1,
     },
     store: {

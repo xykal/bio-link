@@ -4,12 +4,12 @@ import { readStore } from "@/lib/data";
 import { optImg } from "@/lib/img";
 import BioPage from "@/components/BioPage";
 
-// ISR 2 menit: HTML dilayani dari cache edge (Vercel POP terdekat), data
-// di-refresh di belakang layar. Compute Vercel Hobby ada di AS — tanpa ini
-// setiap pengunjung Indonesia menunggu PP Pasifik buat HTML yang isinya
-// sama. Setiap simpan admin memanggil revalidatePath("/") di writeStore,
-// jadi perubahan tetap instan; preview admin pakai cache-buster sendiri.
-export const revalidate = 120;
+// SSR di edge Cloudflare. Dulu di Vercel halaman ini ISR 2 menit karena compute
+// Hobby ada di AS; sekarang render terjadi di POP terdekat pemilik request dan
+// data dibaca lewat binding D1 native, jadi tidak perlu cache HTML terpisah
+// (yang di Cloudflare butuh R2 + DO queue). Micro-cache 10 detik di
+// lib/storecache.ts tetap memangkas query D1 saat trafik ramai.
+export const dynamic = "force-dynamic";
 
 // Satu baca D1 per request (React cache = dedupe utk metadata, viewport, Home).
 // Dibungkus try/catch supaya halaman TIDAK PERNAH 500 walau D1 sedang blip;

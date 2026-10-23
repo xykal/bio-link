@@ -1,9 +1,7 @@
-import { promises as fs } from "fs";
-import path from "path";
 import crypto, { randomUUID } from "crypto";
 import { getTechIcon } from "./stackIcons";
 import { isAllowedLinkUrl } from "./links";
-import { d1Query, useD1 } from "./d1";
+import { d1Available, d1Query } from "./d1";
 import { cacheGet, cacheSet, cacheInvalidate } from "./storecache";
 
 export type LinkItem = {
@@ -657,24 +655,35 @@ async function d1Write(store: Store): Promise<void> {
 // ---------------------------------------------------------------------------
 //  Local file fallback (dev)
 // ---------------------------------------------------------------------------
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "store.json");
+// fs di-import dinamis: di Cloudflare Workers (workerd) filesystem tidak bisa
+// ditulis, jadi modul node:fs tidak boleh ikut ke bundle utama.
+async function dataPaths() {
+  const [{ promises: fs }, path] = await Promise.all([
+    import("node:fs"),
+    import("node:path"),
+  ]);
+  const dir = path.join(process.cwd(), "data");
+  return { fs, dir, file: path.join(dir, "store.json") };
+}
 
 async function ensureFile() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  const { fs, dir, file } = await dataPaths();
+  await fs.mkdir(dir, { recursive: true });
   try {
-    await fs.access(DATA_FILE);
+    await fs.access(file);
   } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify(DEFAULT_STORE, null, 2), "utf-8");
+    await fs.writeFile(file, JSON.stringify(DEFAULT_STORE, null, 2), "utf-8");
   }
 }
 async function fileRead(): Promise<Store> {
+  const { fs, file } = await dataPaths();
   await ensureFile();
-  return normalize(JSON.parse(await fs.readFile(DATA_FILE, "utf-8")));
+  return normalize(JSON.parse(await fs.readFile(file, "utf-8")));
 }
 async function fileWrite(store: Store): Promise<void> {
+  const { fs, file } = await dataPaths();
   await ensureFile();
-  await fs.writeFile(DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
+  await fs.writeFile(file, JSON.stringify(store, null, 2), "utf-8");
 }
 
 // Buang story yang sudah lewat 24 jam (auto-hapus total). Kembalikan juga story
@@ -700,7 +709,7 @@ export async function readStore(): Promise<Store> {
   const hit = cacheGet();
   if (hit) return hit;
 
-  const raw = useD1 ? await d1Read() : await fileRead();
+  const raw = d1Available() ? await d1Read() : await fileRead();
   const { store, changed, expired } = pruneExpiredStories(raw);
   if (changed) {
     // Persist penghapusan. Di fs read-only (serverless file-mode) gagal diam-diam;
@@ -720,17 +729,16 @@ export async function readStore(): Promise<Store> {
 export async function writeStore(store: Store): Promise<void> {
   // Buang cache sebelum menulis supaya data basi tidak pernah terbaca.
   cacheInvalidate();
-  const res = useD1 ? await d1Write(store) : await fileWrite(store);
+  const res = d1Available() ? await d1Write(store) : await fileWrite(store);
   cacheSet(store);
-  // Halaman "/" kini ISR (cache edge 2 menit) — invalidate segera supaya
-  // simpan admin langsung terlihat, tidak menunggu jendela revalidasi.
+  // Halaman "/" sekarang SSR (dynamic), jadi tidak ada cache HTML yang perlu
+  // di-revalidate; micro-cache di atas sudah dibuang sebelum menulis.
   try {
     const { revalidatePath } = await import("next/cache");
     revalidatePath("/");
   } catch {
-    // Best-effort: kalau gagal (mis. dipanggil di konteks non-request),
-    // cache edge tetap kedaluwarsa maks 2 menit kemudian.
+    // Route dynamic: revalidatePath tidak wajib, aman kalau tidak tersedia.
   }
   return res;
 }
-export { useD1, STORY_TTL_MS as STORY_TTL, pruneExpiredStories };
+export { STORY_TTL_MS as STORY_TTL, pruneExpiredStories };

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { d1Query, useD1 } from "./d1";
+import { d1Available, d1Query } from "./d1";
 
 const buckets = new Map<string, { hits: number[]; seenAt: number }>();
 const WINDOW_CLEANUP_MS = 5 * 60_000;
@@ -52,7 +52,7 @@ export async function sharedRateLimit(
   limit: number,
   windowMs: number
 ): Promise<RateLimitResult> {
-  if (!useD1) return rateLimit(key, limit, windowMs);
+  if (!d1Available()) return rateLimit(key, limit, windowMs);
 
   const now = Date.now();
   const windowStart = Math.floor(now / windowMs) * windowMs;
@@ -89,8 +89,16 @@ export async function sharedRateLimit(
 }
 
 export function clientIp(req: Request): string {
+  // cf-connecting-ip diisi Cloudflare dan tidak bisa dipalsukan klien; ini satu-
+  // satunya sumber IP tepercaya setelah pindah dari Vercel (yang mengisi
+  // x-forwarded-for). Tanpa ini semua pengunjung jatuh ke bucket "unknown".
   const forwarded = req.headers.get("x-forwarded-for") || "";
-  return forwarded.split(",")[0].trim() || req.headers.get("x-real-ip") || "unknown";
+  return (
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    forwarded.split(",")[0].trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown"
+  );
 }
 
 export function clientKey(req: Request, visitorId = ""): string {

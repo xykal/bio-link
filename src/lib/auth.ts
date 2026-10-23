@@ -90,6 +90,13 @@ export function clearSessionCookie() {
 }
 
 export function clientIp(req: Request): string {
+  // Cloudflare Workers menyediakan cf-connecting-ip (tepercaya, tidak bisa
+  // dipalsukan); x-forwarded-for dipakai sebagai fallback saat dev lokal.
   const forwarded = req.headers.get("x-forwarded-for") || "";
-  return forwarded.split(",")[0].trim() || req.headers.get("x-real-ip") || "unknown";
+  return (
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    forwarded.split(",")[0].trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown"
+  );
 }

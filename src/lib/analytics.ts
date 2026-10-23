@@ -1,6 +1,4 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { useD1, d1Query } from "./d1";
+import { d1Available, d1Query } from "./d1";
 import { randomAnonName } from "./names";
 
 // Statistik pengunjung + interaksi. Persisten: Cloudflare D1 (baris id=2 di
@@ -58,8 +56,14 @@ const EMPTY: AnalyticsData = {
   visitors: {},
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const FILE = path.join(DATA_DIR, "analytics.json");
+// fs hanya dipakai di mode file lokal (dev). Di Workers tidak ada filesystem
+// tulis, jadi import-nya dinamis supaya node:fs tidak masuk bundle utama.
+async function analyticsFile() {
+  const [{ promises: fs }, path] = await Promise.all([import("node:fs"), import("node:path")]);
+  const dir = path.join(process.cwd(), "data");
+  return { fs, dir, file: path.join(dir, "analytics.json") };
+}
+
 const TABLE = "store";
 const ROW_ID = 2; // id=1 dipakai data utama; id=2 untuk analytics
 
@@ -82,13 +86,14 @@ function merge(raw: Partial<AnalyticsData>): AnalyticsData {
 async function read(): Promise<AnalyticsData> {
   if (cache) return cache;
   try {
-    if (useD1) {
+    if (d1Available()) {
       const rows = await d1Query(`SELECT data FROM ${TABLE} WHERE id = ${ROW_ID}`);
       const first = rows?.[0]?.results?.[0] as { data?: string } | undefined;
       cache = first?.data ? merge(JSON.parse(first.data)) : { ...EMPTY };
     } else {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      cache = merge(JSON.parse(await fs.readFile(FILE, "utf-8")));
+      const { fs, dir, file } = await analyticsFile();
+      await fs.mkdir(dir, { recursive: true });
+      cache = merge(JSON.parse(await fs.readFile(file, "utf-8")));
     }
   } catch {
     cache = { ...EMPTY };
@@ -99,15 +104,16 @@ async function read(): Promise<AnalyticsData> {
 async function write(data: AnalyticsData) {
   cache = data;
   try {
-    if (useD1) {
+    if (d1Available()) {
       await d1Query(
         `INSERT INTO ${TABLE} (id, data) VALUES (?, ?)
          ON CONFLICT(id) DO UPDATE SET data = excluded.data;`,
         [ROW_ID, JSON.stringify(data)]
       );
     } else {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      await fs.writeFile(FILE, JSON.stringify(data), "utf-8");
+      const { fs, dir, file } = await analyticsFile();
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(file, JSON.stringify(data), "utf-8");
     }
   } catch {
     /* read-only fs / D1 gagal: in-memory saja */

@@ -8,10 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node tests/r15.mjs",
-    "test:responsive": "node tests/responsive-links.mjs"
+    "test:responsive": "node tests/responsive-links.mjs",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
-    "next": "16.3.4",
+    "next": "16.4.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "simple-icons": "^16.29.0"
@@ -22,10 +24,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.2",
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@opennextjs/cloudflare": "1.20.12",
+    "wrangler": "^4.151.3"
   },
   "browserslist": [
     ">0.3%",
@@ -34,5 +38,8 @@
     "not dead",
     "not op_mini all",
     "not IE 11"
-  ]
+  ],
+  "engines": {
+    "node": ">=22"
+  }
 }
