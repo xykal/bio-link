@@ -50,6 +50,22 @@ export async function PATCH(req: Request) {
   if (["pill", "rounded", "soft", "square"].includes(body.linkShape)) {
     store.linkShape = body.linkShape;
   }
+  if (Array.isArray(body.projects)) {
+    store.projects = normalize({ projects: body.projects }).projects;
+  }
+  if (Array.isArray(body.products)) {
+    store.products = normalize({ products: body.products }).products;
+  }
+  if (body.shop && typeof body.shop === "object") {
+    const merged = normalize({ shop: { ...store.shop, ...body.shop } });
+    store.shop = merged.shop;
+  }
+  if (body.tabs && typeof body.tabs === "object") {
+    store.tabs = {
+      projects: body.tabs.projects !== false,
+      shop: body.tabs.shop === true,
+    };
+  }
   if (Array.isArray(body.stories)) {
     // Pakai normalize() sebagai satu sumber kebenaran (dukung image/text/video/
     // audio + simpan mediaPublicId/mediaResourceType untuk auto-destroy 24 jam).

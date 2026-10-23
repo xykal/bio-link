@@ -27,6 +27,43 @@
 
 ---
 
+### 2026-10-23 - Tab Project & Shop + Checkout Pakasir + SEO lengkap
+**Status:** Done (kecuali kredensial Pakasir produksi — lihat Next Step)
+
+**Yang dikerjain:**
+- Halaman terpisah `/project` dan `/shop` dengan pill tab Bio/Project/Shop (tab otomatis disembunyikan kalau dimatikan di panel).
+- Kartu project rich: cover 16:9, judul, deskripsi, badge status, chip tech stack, tombol Demo + Repo. Grid 2 kolom desktop / 1 kolom HP.
+- Shop: cart-less checkout langsung dari bio/shop. Order dibuat di server (harga & total dihitung dari store, bukan dari client), lalu QRIS via Pakasir, status di-polling tiap 6 detik.
+- Tabel D1 `shop_orders` auto-create (idempoten), rate limit 8 order / 10 menit per IP, endpoint cek status re-verify ke API Pakasir (bukan percaya client/webhook mentah).
+- Panel admin: menu **Project** dan **Shop** — CRUD penuh (tambah/edit/hapus/urutkan), upload cover ke Cloudinary folder `bio-link/project` & `bio-link/shop`, toggle tab publik, pengaturan shop (aktif, judul, catatan).
+- SEO: `robots.txt`, `sitemap.xml` dinamis (hanya mendaftar /project & /shop kalau tab aktif), `manifest.webmanifest` PWA, JSON-LD `Person` di beranda, `CollectionPage`+`SoftwareApplication` di /project, `Product` di /shop, canonical + OG per halaman. `/admin` dan `/api` di-disallow.
+
+**File yang diubah/dibuat:**
+- `src/lib/data.ts` -> tipe `ProjectItem`, `ProductItem`, `ShopConfig`, `NavTabs` + seed 7 project + normalisasi & batas panjang/URL.
+- `src/lib/pakasir.ts` -> klien Pakasir (create transaksi, detail, URL bayar).
+- `src/app/api/shop/order/route.ts`, `src/app/api/shop/status/route.ts`.
+- `src/app/api/data/route.ts`, `src/app/api/admin/settings/route.ts` -> expose & terima `projects`/`products`/`shop`/`tabs`.
+- `src/app/api/upload/route.ts`, `src/app/api/upload/sign/route.ts` -> whitelist folder project & shop.
+- `src/components/TabNav.tsx`, `ProjectGrid.tsx`, `ShopGrid.tsx` (baru), `BioPage.tsx` (prop `view`).
+- `src/app/project/page.tsx`, `src/app/shop/page.tsx`, `src/app/robots.ts`, `src/app/sitemap.ts`, `src/app/manifest.ts`, `src/app/page.tsx` (JSON-LD Person).
+- `src/app/admin/AdminPanel.tsx` -> nav Project & Shop, state, helper CRUD, `SwitchRow`.
+
+**Kendala & Solusi:**
+- Panel butuh upload cover -> folder Cloudinary baru harus masuk whitelist di dua route (`upload` dan `upload/sign`), kalau tidak upload dibalas 400.
+- Simpan project/produk pakai PATCH settings yang sudah ada (bukan route CRUD baru) supaya urutan & atomisitas terjaga dalam satu JSON store.
+- Kredensial Pakasir yang beredar di repo publik bukan milik Haekal -> **tidak dipakai**, wajib bikin project Pakasir sendiri.
+
+**Build & Release:**
+- `npm run build` + `npx opennextjs-cloudflare build` bersih; `tsc --noEmit` & `eslint src` tanpa error/warning.
+- Uji lokal `wrangler dev`: `/`, `/project`, `/shop`, `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest` = 200; PATCH settings via login admin mengaktifkan tab shop dan sitemap ikut menambah `/shop`; order tanpa kredensial dibalas 503 dengan pesan jelas.
+
+**Next Step:**
+- Set Worker secret `PAKASIR_PROJECT` dan `PAKASIR_API_KEY` (`npx wrangler secret put ...`) lalu uji `POST https://app.pakasir.com/api/paymentsimulation`.
+- Isi produk asli + cover project dari panel admin, lalu submit sitemap ke Google Search Console.
+- Rotasi password admin produksi kalau mau (sekarang `bio-haekal-d1a97aba`).
+
+---
+
 ### 2026-10-23 - Migrasi hosting Vercel -> Cloudflare Workers (OpenNext)
 **Status:** Done — live di https://bio.haekal.web.id (Cloudflare Workers, versi a42ef5c5)
 **Dikerjain oleh:** AI Agent + xykal

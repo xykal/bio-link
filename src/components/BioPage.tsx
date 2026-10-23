@@ -5,7 +5,21 @@ import dynamic from "next/dynamic";
 import { Icon } from "./Icons";
 import { fontCss } from "@/lib/fonts";
 import { optImg } from "@/lib/img";
-import type { LinkItem, Store, Bubble, BubbleStyle, BubblePosition } from "@/lib/data";
+import type {
+  LinkItem,
+  Store,
+  Bubble,
+  BubbleStyle,
+  BubblePosition,
+  ProjectItem,
+  ProductItem,
+  ShopConfig,
+} from "@/lib/data";
+import TabNav from "./TabNav";
+import ProjectGrid from "./ProjectGrid";
+import ShopGrid from "./ShopGrid";
+
+export type BioView = "bio" | "project" | "shop";
 
 export type PublicData = {
   profile: Store["profile"];
@@ -23,6 +37,10 @@ export type PublicData = {
   bubble: Store["bubble"];
   sections: Store["sections"];
   branding: Store["branding"];
+  projects: ProjectItem[];
+  products: ProductItem[];
+  shop: ShopConfig;
+  tabs: Store["tabs"];
   rulesUrl: string;
 };
 
@@ -171,6 +189,12 @@ function toPublic(s: Store): PublicData {
     bubble: s.bubble || { enabled: false, text: "", style: "speech", position: "top-right" },
     sections: s.sections || { stack: true, team: true },
     branding: s.branding,
+    projects: (s.projects || []).filter((p) => p.enabled).sort((a, b) => a.order - b.order),
+    products: s.shop?.enabled
+      ? (s.products || []).filter((p) => p.enabled).sort((a, b) => a.order - b.order)
+      : [],
+    shop: s.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] },
+    tabs: s.tabs || { projects: true, shop: false },
     rulesUrl: s.seo.rulesUrl,
   };
 }
@@ -373,7 +397,13 @@ function ProfileBubble({
   );
 }
 
-export default function BioPage({ initial }: { initial: Store | null }) {
+export default function BioPage({
+  initial,
+  view = "bio",
+}: {
+  initial: Store | null;
+  view?: BioView;
+}) {
   const [data, setData] = useState<PublicData | null>(() =>
     initial ? toPublic(initial) : null
   );
@@ -881,6 +911,10 @@ export default function BioPage({ initial }: { initial: Store | null }) {
           )}
 
           {/* Stack keeps the original overlapping logo row; overlap tightens only when needed to fit a narrow viewport. */}
+          <TabNav tabs={data?.tabs || { projects: false, shop: false }} accent={profile?.accent} />
+
+          {view === "bio" && (
+            <>
           {sections.stack && visibleStack.length > 0 && (
             <div
               ref={stackContainerRef}
@@ -1119,6 +1153,21 @@ export default function BioPage({ initial }: { initial: Store | null }) {
                 })}
               </div>
             </div>
+          )}
+
+            </>
+          )}
+
+          {view === "project" && (
+            <ProjectGrid projects={data?.projects || []} isLight={!!isLight} />
+          )}
+
+          {view === "shop" && (
+            <ShopGrid
+              products={data?.products || []}
+              shop={data?.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] }}
+              isLight={!!isLight}
+            />
           )}
 
           <footer className="mt-8">

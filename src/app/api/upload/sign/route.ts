@@ -13,6 +13,8 @@ const ALLOWED_FOLDERS = new Set([
   "bio-link/og",
   "bio-link/team",
   "bio-link/story",
+  "bio-link/project",
+  "bio-link/shop",
 ]);
 
 // Kirim signature agar browser bisa upload LANGSUNG ke Cloudinary.

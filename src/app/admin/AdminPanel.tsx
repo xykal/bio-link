@@ -25,6 +25,11 @@ import type {
   BubbleStyle,
   BubblePosition,
   LinkLayout,
+  ProjectItem,
+  ProductItem,
+  ShopConfig,
+  ProjectStatus,
+  ProductKind,
 } from "@/lib/data";
 
 const SHAPES: { key: ProfileShape; label: string }[] = [
@@ -125,7 +130,9 @@ type NavKey =
   | "tampilan"
   | "data"
   | "perawatan"
-  | "stats";
+  | "stats"
+  | "project"
+  | "shop";
 
 const NAV: { key: NavKey; label: string; icon: string }[] = [
   { key: "preview", label: "Preview", icon: "eye" },
@@ -135,6 +142,8 @@ const NAV: { key: NavKey; label: string; icon: string }[] = [
   { key: "story", label: "Story", icon: "play" },
   { key: "bubble", label: "Gelembung", icon: "message" },
   { key: "tampilan", label: "Tampilan & SEO", icon: "image" },
+  { key: "project", label: "Project", icon: "image" },
+  { key: "shop", label: "Shop", icon: "inbox" },
   { key: "data", label: "Data", icon: "database" },
   { key: "perawatan", label: "Perawatan", icon: "wrench" },
   { key: "stats", label: "Statistik", icon: "chart" },
@@ -320,6 +329,20 @@ export default function AdminPanel() {
   });
   const [sections, setSections] = useState<Sections>({ stack: true, team: true });
   const [stories, setStories] = useState<Story[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [shop, setShop] = useState<ShopConfig>({
+    enabled: false,
+    headline: "Shop",
+    note: "",
+    methods: ["qris"],
+  });
+  const [tabs, setTabs] = useState<{ projects: boolean; shop: boolean }>({
+    projects: true,
+    shop: false,
+  });
+  const [projDraft, setProjDraft] = useState<ProjectItem | null>(null);
+  const [prodDraft, setProdDraft] = useState<ProductItem | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [recId, setRecId] = useState<string | null>(null);
@@ -499,6 +522,10 @@ export default function AdminPanel() {
       setSections(d.sections || { stack: true, team: true });
       setTeam(d.team || []);
       setStories(d.stories || []);
+      setProjects(d.projects || []);
+      setProducts(d.products || []);
+      setShop(d.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] });
+      setTabs(d.tabs || { projects: true, shop: false });
       setLinkShape(d.linkShape || "rounded");
       setFonts(d.fonts);
       setSeo(d.seo);
@@ -724,9 +751,107 @@ export default function AdminPanel() {
       if (patch.fonts) setFonts(d.fonts);
       if (patch.branding) setBranding(d.branding);
       if (patch.theme) setTheme(d.theme);
+      if (patch.projects) setProjects(d.projects);
+      if (patch.products) setProducts(d.products);
+      if (patch.shop) setShop(d.shop);
+      if (patch.tabs) setTabs(d.tabs);
       flash("Tersimpan");
     } else {
       flash("Gagal menyimpan pengaturan", false);
+    }
+  }
+
+  // ---- project & shop ----
+  const EMPTY_PROJECT: ProjectItem = {
+    id: "",
+    title: "",
+    description: "",
+    image: "",
+    stack: [],
+    status: "live",
+    demoUrl: "",
+    repoUrl: "",
+    featured: false,
+    order: 0,
+    enabled: true,
+  };
+
+  const EMPTY_PRODUCT: ProductItem = {
+    id: "",
+    name: "",
+    description: "",
+    image: "",
+    price: 0,
+    originalPrice: 0,
+    category: "",
+    badge: "",
+    stock: -1,
+    kind: "digital",
+    order: 0,
+    enabled: true,
+  };
+
+  async function saveProjects(next: ProjectItem[]) {
+    setProjects(next);
+    setProjDraft(null);
+    await saveSettings({ projects: next });
+  }
+
+  async function saveProducts(next: ProductItem[]) {
+    setProducts(next);
+    setProdDraft(null);
+    await saveSettings({ products: next });
+  }
+
+  function startNewProject() {
+    setProjDraft({
+      ...EMPTY_PROJECT,
+      id: crypto.randomUUID(),
+      order: projects.length,
+    });
+  }
+
+  function startNewProduct() {
+    setProdDraft({
+      ...EMPTY_PRODUCT,
+      id: crypto.randomUUID(),
+      order: products.length,
+    });
+  }
+
+  function upsertProject(draft: ProjectItem) {
+    const exists = projects.some((p) => p.id === draft.id);
+    const next = exists
+      ? projects.map((p) => (p.id === draft.id ? draft : p))
+      : [...projects, draft];
+    void saveProjects(next.map((p, i) => ({ ...p, order: i })));
+  }
+
+  function upsertProduct(draft: ProductItem) {
+    const exists = products.some((p) => p.id === draft.id);
+    const next = exists
+      ? products.map((p) => (p.id === draft.id ? draft : p))
+      : [...products, draft];
+    void saveProducts(next.map((p, i) => ({ ...p, order: i })));
+  }
+
+  function moveItem<T extends { id: string }>(list: T[], id: string, delta: number): T[] {
+    const index = list.findIndex((item) => item.id === id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= list.length) return list;
+    const next = [...list];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    return next.map((item, i) => ({ ...item, order: i }));
+  }
+
+  async function pickImage(folder: string, file: File): Promise<string | null> {
+    setUploadingId("cover");
+    setUploadPct(0);
+    try {
+      return await upload(folder, file);
+    } finally {
+      setUploadingId(null);
     }
   }
 
@@ -2406,6 +2531,473 @@ export default function AdminPanel() {
             </>
           )}
 
+          {view === "project" && (
+            <>
+              <Section title="Tab Halaman Publik" sub="Mengatur menu apa saja yang muncul di bio, /project, dan /shop">
+                <div className="flex flex-col gap-2">
+                  <SwitchRow
+                    label="Tampilkan tab Project"
+                    checked={tabs.projects}
+                    onChange={(v) => saveSettings({ tabs: { ...tabs, projects: v } })}
+                  />
+                  <SwitchRow
+                    label="Tampilkan tab Shop"
+                    checked={tabs.shop}
+                    onChange={(v) => saveSettings({ tabs: { ...tabs, shop: v } })}
+                  />
+                </div>
+                <p className="mt-3 text-xs text-white/35">
+                  Tab Bio selalu tampil. Halaman project & shop punya URL sendiri (/project, /shop)
+                  dan otomatis masuk sitemap selama tab-nya aktif.
+                </p>
+              </Section>
+
+              <Section
+                title="Project"
+                sub={`${projects.length} project · tampil di grid 2 kolom (1 kolom di HP)`}
+                right={
+                  <button type="button" onClick={startNewProject} className={btnCls}>
+                    + Tambah project
+                  </button>
+                }
+              >
+                {projects.length === 0 ? (
+                  <EmptyState
+                    icon="image"
+                    title="Belum ada project"
+                    sub="Tambahkan project pertama — cover, deskripsi, tech stack, dan link demo/repo."
+                    actionLabel="Tambah project"
+                    onAction={startNewProject}
+                  />
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {projects.map((p, i) => (
+                      <li
+                        key={p.id}
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-2.5"
+                      >
+                        <span className="flex h-11 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/10 text-[10px] font-bold text-white/50">
+                          {p.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={optImg(p.image, { w: 160, h: 110, crop: "fill" })} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            p.title.slice(0, 2).toUpperCase()
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-white/90">{p.title}</p>
+                          <p className="truncate text-[11px] text-white/40">
+                            {p.status} · {p.stack.join(", ") || "tanpa stack"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label="Naikkan"
+                            disabled={i === 0}
+                            onClick={() => void saveProjects(moveItem(projects, p.id, -1))}
+                            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Turunkan"
+                            disabled={i === projects.length - 1}
+                            onClick={() => void saveProjects(moveItem(projects, p.id, 1))}
+                            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProjDraft(p)}
+                            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-semibold text-white/80"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Hapus project "${p.title}"?`)) return;
+                              void saveProjects(projects.filter((x) => x.id !== p.id));
+                            }}
+                            className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs font-semibold text-rose-200"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+
+              {projDraft && (
+                <Section title={projects.some((p) => p.id === projDraft.id) ? "Edit project" : "Project baru"}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Judul">
+                      <input
+                        className={inputCls}
+                        value={projDraft.title}
+                        onChange={(e) => setProjDraft({ ...projDraft, title: e.target.value })}
+                        placeholder="XyDesk Remote"
+                      />
+                    </Field>
+                    <Field label="Status">
+                      <Dropdown
+                        value={projDraft.status}
+                        options={PROJECT_STATUS_OPTIONS}
+                        onChange={(v: string) => setProjDraft({ ...projDraft, status: v as ProjectStatus })}
+                      />
+                    </Field>
+                    <div className="sm:col-span-2">
+                      <Field label="Deskripsi singkat" hint="Maks 400 karakter, tampil 3 baris di kartu">
+                        <textarea
+                          className={inputCls}
+                          rows={3}
+                          value={projDraft.description}
+                          onChange={(e) => setProjDraft({ ...projDraft, description: e.target.value })}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Tech stack" hint="Pisahkan dengan koma">
+                      <input
+                        className={inputCls}
+                        value={projDraft.stack.join(", ")}
+                        onChange={(e) =>
+                          setProjDraft({
+                            ...projDraft,
+                            stack: e.target.value
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean)
+                              .slice(0, 8),
+                          })
+                        }
+                        placeholder="Kotlin, Android, Shizuku"
+                      />
+                    </Field>
+                    <Field label="URL Demo" hint="Kosongkan kalau belum ada">
+                      <input
+                        className={inputCls}
+                        value={projDraft.demoUrl}
+                        onChange={(e) => setProjDraft({ ...projDraft, demoUrl: e.target.value })}
+                        placeholder="https://…"
+                      />
+                    </Field>
+                    <Field label="URL Repo">
+                      <input
+                        className={inputCls}
+                        value={projDraft.repoUrl}
+                        onChange={(e) => setProjDraft({ ...projDraft, repoUrl: e.target.value })}
+                        placeholder="https://github.com/xykal/…"
+                      />
+                    </Field>
+                    <Field label="Cover" hint="Unggah gambar atau tempel URL">
+                      <div className="flex flex-col gap-2">
+                        <input
+                          className={inputCls}
+                          value={projDraft.image}
+                          onChange={(e) => setProjDraft({ ...projDraft, image: e.target.value })}
+                          placeholder="https://res.cloudinary.com/…"
+                        />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="text-xs text-white/50"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!file) return;
+                            const url = await pickImage("bio-link/project", file);
+                            if (url) setProjDraft({ ...projDraft, image: url });
+                          }}
+                        />
+                        {uploadingId === "cover" && (
+                          <span className="text-[11px] text-white/40">Mengunggah…</span>
+                        )}
+                      </div>
+                    </Field>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    <SwitchRow
+                      label="Tandai unggulan"
+                      checked={projDraft.featured}
+                      onChange={(v) => setProjDraft({ ...projDraft, featured: v })}
+                    />
+                    <SwitchRow
+                      label="Tampilkan di halaman publik"
+                      checked={projDraft.enabled}
+                      onChange={(v) => setProjDraft({ ...projDraft, enabled: v })}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => upsertProject(projDraft)} className={btnCls}>
+                      Simpan project
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProjDraft(null)}
+                      className="rounded-xl border border-white/10 px-4 py-2.5 font-semibold text-white/70"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </Section>
+              )}
+            </>
+          )}
+
+          {view === "shop" && (
+            <>
+              <Section title="Pengaturan Shop" sub="Pembayaran otomatis lewat QRIS Pakasir">
+                <div className="flex flex-col gap-2">
+                  <SwitchRow
+                    label="Shop aktif (bisa dibeli pengunjung)"
+                    checked={shop.enabled}
+                    onChange={(v) => saveSettings({ shop: { ...shop, enabled: v } })}
+                  />
+                  <SwitchRow
+                    label="Tampilkan tab Shop di halaman publik"
+                    checked={tabs.shop}
+                    onChange={(v) => saveSettings({ tabs: { ...tabs, shop: v } })}
+                  />
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <Field label="Judul halaman shop">
+                    <input
+                      className={inputCls}
+                      value={shop.headline}
+                      onChange={(e) => setShop({ ...shop, headline: e.target.value })}
+                      onBlur={() => saveSettings({ shop })}
+                    />
+                  </Field>
+                  <Field label="Catatan / instruksi" hint="Tampil di atas daftar produk">
+                    <textarea
+                      className={inputCls}
+                      rows={3}
+                      value={shop.note}
+                      onChange={(e) => setShop({ ...shop, note: e.target.value })}
+                      onBlur={() => saveSettings({ shop })}
+                    />
+                  </Field>
+                </div>
+                <p className="mt-3 text-xs text-white/35">
+                  Metode pembayaran: QRIS (Pakasir project <b>{`${
+                    shop.enabled ? "aktif" : "nonaktif"
+                  }`}</b>). Kredensial PAKASIR_PROJECT &amp; PAKASIR_API_KEY diset sebagai Worker secret,
+                  bukan di panel.
+                </p>
+              </Section>
+
+              <Section
+                title="Produk"
+                sub={`${products.length} produk`}
+                right={
+                  <button type="button" onClick={startNewProduct} className={btnCls}>
+                    + Tambah produk
+                  </button>
+                }
+              >
+                {products.length === 0 ? (
+                  <EmptyState
+                    icon="inbox"
+                    title="Belum ada produk"
+                    sub="Tambahkan produk digital, jasa, atau barang dengan harga dan stok."
+                    actionLabel="Tambah produk"
+                    onAction={startNewProduct}
+                  />
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {products.map((p, i) => (
+                      <li
+                        key={p.id}
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-2.5"
+                      >
+                        <span className="flex h-11 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/10 text-[10px] font-bold text-white/50">
+                          {p.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={optImg(p.image, { w: 160, h: 110, crop: "fill" })} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            p.name.slice(0, 2).toUpperCase()
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-white/90">{p.name}</p>
+                          <p className="truncate text-[11px] text-white/40">
+                            Rp {p.price.toLocaleString("id-ID")} · {p.stock < 0 ? "stok bebas" : `stok ${p.stock}`}
+                            {p.enabled ? "" : " · disembunyikan"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label="Naikkan"
+                            disabled={i === 0}
+                            onClick={() => void saveProducts(moveItem(products, p.id, -1))}
+                            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Turunkan"
+                            disabled={i === products.length - 1}
+                            onClick={() => void saveProducts(moveItem(products, p.id, 1))}
+                            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProdDraft(p)}
+                            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-semibold text-white/80"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Hapus produk "${p.name}"?`)) return;
+                              void saveProducts(products.filter((x) => x.id !== p.id));
+                            }}
+                            className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs font-semibold text-rose-200"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+
+              {prodDraft && (
+                <Section title={products.some((p) => p.id === prodDraft.id) ? "Edit produk" : "Produk baru"}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Nama produk">
+                      <input
+                        className={inputCls}
+                        value={prodDraft.name}
+                        onChange={(e) => setProdDraft({ ...prodDraft, name: e.target.value })}
+                        placeholder="Sewa PC Cloud 1 Hari"
+                      />
+                    </Field>
+                    <Field label="Jenis">
+                      <Dropdown
+                        value={prodDraft.kind}
+                        options={PRODUCT_KIND_OPTIONS}
+                        onChange={(v: string) => setProdDraft({ ...prodDraft, kind: v as ProductKind })}
+                      />
+                    </Field>
+                    <div className="sm:col-span-2">
+                      <Field label="Deskripsi">
+                        <textarea
+                          className={inputCls}
+                          rows={3}
+                          value={prodDraft.description}
+                          onChange={(e) => setProdDraft({ ...prodDraft, description: e.target.value })}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Harga (Rp)" hint="Harus > 0 supaya bisa dibeli">
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputCls}
+                        value={prodDraft.price}
+                        onChange={(e) => setProdDraft({ ...prodDraft, price: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="Harga coret (Rp)" hint="0 = tidak ditampilkan">
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputCls}
+                        value={prodDraft.originalPrice}
+                        onChange={(e) =>
+                          setProdDraft({ ...prodDraft, originalPrice: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Stok" hint="-1 = tak terbatas, 0 = habis">
+                      <input
+                        type="number"
+                        className={inputCls}
+                        value={prodDraft.stock}
+                        onChange={(e) => setProdDraft({ ...prodDraft, stock: Number(e.target.value) || 0 })}
+                      />
+                    </Field>
+                    <Field label="Badge" hint="Mis. Terlaris / Promo (opsional)">
+                      <input
+                        className={inputCls}
+                        value={prodDraft.badge}
+                        onChange={(e) => setProdDraft({ ...prodDraft, badge: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Kategori">
+                      <input
+                        className={inputCls}
+                        value={prodDraft.category}
+                        onChange={(e) => setProdDraft({ ...prodDraft, category: e.target.value })}
+                        placeholder="Akun digital / Jasa"
+                      />
+                    </Field>
+                    <Field label="Gambar produk">
+                      <div className="flex flex-col gap-2">
+                        <input
+                          className={inputCls}
+                          value={prodDraft.image}
+                          onChange={(e) => setProdDraft({ ...prodDraft, image: e.target.value })}
+                          placeholder="https://res.cloudinary.com/…"
+                        />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="text-xs text-white/50"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!file) return;
+                            const url = await pickImage("bio-link/shop", file);
+                            if (url) setProdDraft({ ...prodDraft, image: url });
+                          }}
+                        />
+                        {uploadingId === "cover" && (
+                          <span className="text-[11px] text-white/40">Mengunggah…</span>
+                        )}
+                      </div>
+                    </Field>
+                  </div>
+
+                  <div className="mt-4">
+                    <SwitchRow
+                      label="Tampilkan di shop"
+                      checked={prodDraft.enabled}
+                      onChange={(v) => setProdDraft({ ...prodDraft, enabled: v })}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => upsertProduct(prodDraft)} className={btnCls}>
+                      Simpan produk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProdDraft(null)}
+                      className="rounded-xl border border-white/10 px-4 py-2.5 font-semibold text-white/70"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </Section>
+              )}
+            </>
+          )}
+
           {view === "stats" && (
             <>
         <Section title="Statistik Pengunjung" sub="Total kunjungan, aktivitas harian, info server, dan riwayat.">
@@ -3068,6 +3660,41 @@ function WeekChart({ byDay }: { byDay: Record<string, number> }) {
 
 const inputCls =
   "w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-white placeholder-white/30 outline-none transition focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/20";
+const PROJECT_STATUS_OPTIONS = [
+  { value: "live", label: "Live" },
+  { value: "beta", label: "Beta" },
+  { value: "soon", label: "Segera" },
+  { value: "archived", label: "Arsip" },
+];
+
+const PRODUCT_KIND_OPTIONS = [
+  { value: "digital", label: "Digital" },
+  { value: "service", label: "Jasa" },
+  { value: "physical", label: "Fisik" },
+];
+
+function SwitchRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+      <span className="text-sm text-white/70">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-violet-500"
+      />
+    </label>
+  );
+}
+
 const btnCls =
   "rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 font-semibold text-white transition enabled:hover:from-violet-400 enabled:hover:to-fuchsia-400 disabled:opacity-60";
 

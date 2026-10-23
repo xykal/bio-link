@@ -15,6 +15,8 @@ const ALLOWED_FOLDERS = new Set([
   "bio-link/og",
   "bio-link/team",
   "bio-link/story",
+  "bio-link/project",
+  "bio-link/shop",
 ]);
 
 const MAX_BYTES = 4 * 1024 * 1024; // 4 MB — cukup buat avatar/banner/OG

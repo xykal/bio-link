@@ -66,10 +66,30 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// Structured data profil: bantu Google menampilkan knowledge panel yang benar.
+const personJsonLd = (store: Awaited<ReturnType<typeof getStore>>) => ({
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: store?.profile.name || "Haekal",
+  alternateName: store?.profile.handle || "@xykal",
+  description: store?.profile.bio || "",
+  url: "https://bio.haekal.web.id",
+  image: store?.profile.avatar || "https://bio.haekal.web.id/icon.png",
+  sameAs: Object.values(store?.social || {}).filter(Boolean),
+});
+
 export default async function Home() {
   const initial = await getStore();
   // Ring story abu tidak lagi dibaca dari cookie saat SSR: halaman kini
   // di-cache di edge (sama untuk semua orang). BioPage sudah mengambil
   // status dilihat dari localStorage + /api/data sejak awal di client.
-  return <BioPage initial={initial} />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd(initial)) }}
+      />
+      <BioPage initial={initial} />
+    </>
+  );
 }

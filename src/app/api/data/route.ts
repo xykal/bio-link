@@ -25,6 +25,12 @@ export async function GET() {
       bubble: s.bubble,
       sections: s.sections,
       branding: s.branding,
+      projects: s.projects.filter((p) => p.enabled).sort((a, b) => a.order - b.order),
+      products: s.shop.enabled
+        ? s.products.filter((p) => p.enabled).sort((a, b) => a.order - b.order)
+        : [],
+      shop: s.shop,
+      tabs: s.tabs,
       rulesUrl: s.seo.rulesUrl,
     },
     { headers: { "Cache-Control": "no-store" } }

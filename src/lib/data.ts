@@ -283,8 +283,63 @@ export type Store = {
   bubble: Bubble;
   sections: Sections;
   branding: Branding;
+  projects: ProjectItem[];
+  products: ProductItem[];
+  shop: ShopConfig;
+  tabs: NavTabs;
   maintenance: MaintenanceConfig & { log: MaintenanceLogEntry[] };
 };
+
+// ===== Halaman Project & Shop (tab terpisah di halaman publik) =====
+export type ProjectStatus = "live" | "beta" | "soon" | "archived";
+
+export type ProjectItem = {
+  id: string;
+  title: string;
+  description: string;
+  image: string; // cover (Cloudinary / URL)
+  stack: string[]; // teknologi, mis. ["Kotlin", "Shizuku"]
+  status: ProjectStatus;
+  demoUrl: string;
+  repoUrl: string;
+  featured: boolean;
+  order: number;
+  enabled: boolean;
+};
+
+export type ProductKind = "digital" | "service" | "physical";
+
+export type ProductItem = {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  price: number; // rupiah
+  originalPrice: number; // 0 = tidak ada harga coret
+  category: string;
+  badge: string;
+  stock: number; // -1 = stok tak terbatas
+  kind: ProductKind;
+  order: number;
+  enabled: boolean;
+};
+
+export type ShopConfig = {
+  enabled: boolean;
+  headline: string;
+  note: string;
+  methods: string[]; // metode pembayaran Pakasir, mis. ["qris"]
+};
+
+// Tab yang tampil di halaman publik (Bio selalu ada).
+export type NavTabs = {
+  projects: boolean;
+  shop: boolean;
+};
+
+export const PROJECT_STATUSES: ProjectStatus[] = ["live", "beta", "soon", "archived"];
+export const PRODUCT_KINDS: ProductKind[] = ["digital", "service", "physical"];
+export const SHOP_METHODS = ["qris", "bni_va", "bri_va", "permata_va", "cimb_niaga_va"];
 
 // ---------------------------------------------------------------------------
 //  Cloudflare D1 (REST API) or local file fallback
@@ -414,6 +469,114 @@ const DEFAULT_STORE: Store = {
   stories: [],
   sections: { stack: true, team: true },
   branding: { enabled: true, text: "Made by XySpace Tch" },
+  projects: [
+    {
+      id: randomUUID(),
+      title: "XyDesk Remote",
+      description:
+        "Remote desktop Windows langsung dari browser — sesi RDP nyala dalam hitungan detik tanpa pasang aplikasi.",
+      image: "",
+      stack: ["Next.js", "TypeScript", "Tailscale"],
+      status: "live",
+      demoUrl: "https://rdp.xydesk.my.id",
+      repoUrl: "https://github.com/xykal/XyDesk-Remote",
+      featured: true,
+      order: 0,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "AppPerms",
+      description:
+        "Kelola izin aplikasi Android & display-over-other-apps lewat Shizuku, tanpa root dan tanpa ribet ADB.",
+      image: "",
+      stack: ["Kotlin", "Android", "Shizuku"],
+      status: "live",
+      demoUrl: "https://appsperms.xyverse.my.id/",
+      repoUrl: "https://github.com/xykal/AppPerms",
+      featured: true,
+      order: 1,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "DLAja · XyDownloader",
+      description:
+        "Downloader TikTok: video tanpa watermark, MP3, slide foto, sampai Live Photo — ringan dan offline-first.",
+      image: "",
+      stack: ["Kotlin", "Jetpack Compose"],
+      status: "live",
+      demoUrl: "https://dlaja.xyverse.my.id",
+      repoUrl: "https://github.com/xykal/XyDownloader",
+      featured: true,
+      order: 2,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "Nyawit Live",
+      description:
+        "Game 3D multiplayer bertema perkebunan sawit & haulage canter, dibangun dengan engine native buatan sendiri.",
+      image: "",
+      stack: ["C#", "Unity", "Multiplayer"],
+      status: "beta",
+      demoUrl: "https://nyawit.xyverse.my.id",
+      repoUrl: "https://github.com/xykal/nyawit-live",
+      featured: false,
+      order: 3,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "XyRDP",
+      description:
+        "Windows RDP 6 jam gratis lewat GitHub Actions + Tailscale, tinggal fork dan jalankan workflow.",
+      image: "",
+      stack: ["PowerShell", "GitHub Actions", "Tailscale"],
+      status: "live",
+      demoUrl: "",
+      repoUrl: "https://github.com/xykal/XyRDP",
+      featured: false,
+      order: 4,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "XyCloudStore",
+      description:
+        "Sewa PC cloud, toko akun digital, CS realtime, dan dompet dalam satu tempat.",
+      image: "",
+      stack: ["Next.js", "Cloudflare", "Midtrans"],
+      status: "live",
+      demoUrl: "https://xycloud.my.id",
+      repoUrl: "https://github.com/xykal/XyCloudStore",
+      featured: false,
+      order: 5,
+      enabled: true,
+    },
+    {
+      id: randomUUID(),
+      title: "kilat-motion",
+      description:
+        "Editor motion graphics native Android untuk bikin animasi & video jedag-jedug tanpa watermark.",
+      image: "",
+      stack: ["Kotlin", "Android", "Canvas"],
+      status: "beta",
+      demoUrl: "",
+      repoUrl: "https://github.com/xykal/kilat-motion",
+      featured: false,
+      order: 6,
+      enabled: true,
+    },
+  ],
+  products: [],
+  shop: {
+    enabled: false,
+    headline: "Shop",
+    note: "Pembayaran otomatis via QRIS Pakasir. Setelah bayar, pesanan diproses manual maksimal 1x24 jam.",
+    methods: ["qris"],
+  },
+  tabs: { projects: true, shop: false },
   maintenance: { autoEnabled: true, retentionDays: 30, log: [] },
 };
 
@@ -587,6 +750,69 @@ export function normalize(parsed: Partial<Store>): Store {
       team: parsed.sections?.team !== false,
     },
     branding: { ...d.branding, ...(parsed.branding || {}) },
+    projects: Array.isArray(parsed.projects)
+      ? parsed.projects
+          .filter((p) => p && typeof p.title === "string" && p.title.trim())
+          .slice(0, 60)
+          .map((p, i) => ({
+            id: typeof p.id === "string" && p.id ? p.id.slice(0, 80) : randomUUID(),
+            title: p.title.trim().slice(0, 80),
+            description: typeof p.description === "string" ? p.description.slice(0, 400) : "",
+            image: typeof p.image === "string" ? p.image.slice(0, 500) : "",
+            stack: Array.isArray(p.stack)
+              ? p.stack
+                  .filter((t): t is string => typeof t === "string" && Boolean(t.trim()))
+                  .map((t) => t.trim().slice(0, 24))
+                  .slice(0, 8)
+              : [],
+            status: PROJECT_STATUSES.includes(p.status as ProjectStatus)
+              ? (p.status as ProjectStatus)
+              : "live",
+            demoUrl: typeof p.demoUrl === "string" && isAllowedLinkUrl(p.demoUrl) ? p.demoUrl.slice(0, 500) : "",
+            repoUrl: typeof p.repoUrl === "string" && isAllowedLinkUrl(p.repoUrl) ? p.repoUrl.slice(0, 500) : "",
+            featured: p.featured === true,
+            order: typeof p.order === "number" ? p.order : i,
+            enabled: p.enabled !== false,
+          }))
+      : [...d.projects],
+    products: Array.isArray(parsed.products)
+      ? parsed.products
+          .filter((p) => p && typeof p.name === "string" && p.name.trim())
+          .slice(0, 60)
+          .map((p, i) => ({
+            id: typeof p.id === "string" && p.id ? p.id.slice(0, 80) : randomUUID(),
+            name: p.name.trim().slice(0, 100),
+            description: typeof p.description === "string" ? p.description.slice(0, 400) : "",
+            image: typeof p.image === "string" ? p.image.slice(0, 500) : "",
+            price:
+              typeof p.price === "number" && Number.isFinite(p.price)
+                ? Math.max(0, Math.round(p.price))
+                : 0,
+            originalPrice:
+              typeof p.originalPrice === "number" && Number.isFinite(p.originalPrice)
+                ? Math.max(0, Math.round(p.originalPrice))
+                : 0,
+            category: typeof p.category === "string" ? p.category.slice(0, 40) : "",
+            badge: typeof p.badge === "string" ? p.badge.slice(0, 24) : "",
+            stock: typeof p.stock === "number" && Number.isFinite(p.stock) ? Math.round(p.stock) : -1,
+            kind: PRODUCT_KINDS.includes(p.kind as ProductKind) ? (p.kind as ProductKind) : "digital",
+            order: typeof p.order === "number" ? p.order : i,
+            enabled: p.enabled !== false,
+          }))
+      : [],
+    shop: {
+      enabled: parsed.shop?.enabled === true,
+      headline:
+        typeof parsed.shop?.headline === "string" ? parsed.shop.headline.slice(0, 60) : d.shop.headline,
+      note: typeof parsed.shop?.note === "string" ? parsed.shop.note.slice(0, 300) : d.shop.note,
+      methods: Array.isArray(parsed.shop?.methods)
+        ? parsed.shop!.methods.filter((m): m is string => SHOP_METHODS.includes(m)).slice(0, 5)
+        : d.shop.methods,
+    },
+    tabs: {
+      projects: parsed.tabs?.projects !== false,
+      shop: parsed.tabs?.shop === true,
+    },
     maintenance: {
       autoEnabled: parsed.maintenance?.autoEnabled !== false,
       retentionDays:
