@@ -27,6 +27,36 @@
 
 ---
 
+### 2026-10-23 (lanjutan 9) - Audit Worker + bersih-bersih + rencana offboard XyDesk
+**Status:** Done
+
+**Audit 30 hari** (Cloudflare GraphQL) ditulis ke `WORKERS-AUDIT.md`: 34 script,
+trafik per Worker, error, kapan terakhir aktif, plus alasan tiap kandidat hapus.
+
+**Dihapus hari ini** (setelah backup kode + settings ke `/home/user/worker-backup/`):
+`dykal-push`, `kainet-flow-api`, `xydownloader-api` — ketiganya 0-6 request/30 hari,
+tanpa custom domain, dan **tanpa secret** (jadi tidak ada kunci yang hilang).
+Script tersisa: 31.
+
+**Sengaja DITAHAN** walau trafiknya nol, karena menyimpan secret yang tidak bisa
+dibaca ulang lewat API (hapus = kunci hilang permanen): `autoclipp-auth`,
+`xy-image-api`, `xyverse-ops-db`, `xydesk-news`, `rendiv-studio`,
+`wa-release-bot-lagu`, `veyra-neon-district` (DO berisi data), `xy-mail-handler`
+(kemungkinan Email Routing), `xystock` (punya domain produk).
+
+**Temuan penting:** menghapus Worker **tidak menambah kuota** — kuota free adalah
+total request seluruh akun. Yang menyelamatkan kuota hanya: kurangi polling,
+hapus Worker yang ramai (xydesk), atau upgrade paid.
+
+**Anomali hari ini:** `xydesk-remote-web` rata-rata 21.953/hari (548.818 / 25 hari)
+tapi hari ini 121.823 = 5,6x lipat, lonjakan mulai mendadak jam 05:00 UTC.
+
+**Reset kuota:** 00:00 UTC = **07:00 WIB** (bukan tengah malam WIB). Pemulihan
+domain otomatis ditangani workflow `Emergency Restore` (cek tiap 5 menit di jam
+00:00-01:00 UTC).
+
+---
+
 ### 2026-10-23 (lanjutan 8) - Pemulihan domain OTOMATIS setelah kuota reset
 **Status:** Done, teruji (uji jalan nyata di runner)
 
