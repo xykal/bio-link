@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { readStore } from "@/lib/data";
 import BioPage from "@/components/BioPage";
 import { withPayReady } from "@/lib/pakasir";
+import { withTechIndex } from "@/lib/techResolve";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,7 @@ export default async function ShopPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <BioPage initial={store ? withPayReady(store) : null} view="shop" />
+      <BioPage initial={store ? withTechIndex(withPayReady(store)) : null} view="shop" />
     </>
   );
 }

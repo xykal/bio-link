@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { optImg } from "@/lib/img";
+import TechChip, { type TechIconLite } from "./TechChip";
 import type { ProjectItem } from "@/lib/data";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -83,10 +84,12 @@ function ProjectCover({ project, glyph }: { project: ProjectItem; glyph: string 
 
 export default function ProjectGrid({
   projects,
+  techIndex,
   isLight,
   limit,
 }: {
   projects: ProjectItem[];
+  techIndex?: Record<string, TechIconLite>;
   isLight?: boolean;
   limit?: number;
 }) {
@@ -166,16 +169,13 @@ export default function ProjectGrid({
               {p.stack.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-1.5">
                   {p.stack.map((t) => (
-                    <li
+                    <TechChip
                       key={t}
-                      className={`rounded-md border px-1.5 py-0.5 text-[10.5px] font-medium ${
-                        isLight
-                          ? "border-black/10 bg-black/[0.04] text-black/60"
-                          : "border-white/10 bg-white/[0.06] text-white/70"
-                      }`}
-                    >
-                      {t}
-                    </li>
+                      label={t}
+                      icon={techIndex?.[t.trim().toLowerCase()]}
+                      accent={accent}
+                      isLight={isLight}
+                    />
                   ))}
                 </ul>
               )}

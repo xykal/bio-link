@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readStore, type ProjectItem } from "@/lib/data";
 import { optImg } from "@/lib/img";
+import { resolveTech } from "@/lib/techResolve";
+import Prose from "@/components/Prose";
 
 const SITE = "https://bio.haekal.web.id";
 
@@ -110,6 +112,10 @@ export default async function ProjectDetailPage({ params }: Params) {
         ...(project.repoUrl ? { codeRepository: project.repoUrl } : {}),
         ...(project.demoUrl ? { installUrl: project.demoUrl } : {}),
         ...(project.stack.length ? { keywords: project.stack.join(", ") } : {}),
+        ...(project.features.length ? { featureList: project.features } : {}),
+        ...(project.gallery.length
+          ? { screenshot: project.gallery.map((g) => (g.startsWith("http") ? g : `${SITE}${g}`)) }
+          : {}),
         author: { "@type": "Person", name, url: SITE },
         offers: { "@type": "Offer", price: "0", priceCurrency: "IDR" },
       },
@@ -204,12 +210,98 @@ export default async function ProjectDetailPage({ params }: Params) {
                   Tech stack
                 </h2>
                 <ul className="mt-2 flex flex-wrap gap-1.5">
-                  {project.stack.map((t) => (
+                  {project.stack.map((label) => {
+                    const icon = resolveTech(label);
+                    return (
+                      <li
+                        key={label}
+                        title={icon ? `${icon.title} · ${label}` : label}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-[11.5px] font-medium text-white/75"
+                      >
+                        {icon ? (
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" aria-hidden>
+                            <path d={icon.path} fill={`#${icon.hex}`} />
+                          </svg>
+                        ) : (
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: accent }}
+                            aria-hidden
+                          />
+                        )}
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+
+            {project.features.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
+                  Fitur utama
+                </h2>
+                <ul className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                  {project.features.map((f) => (
                     <li
-                      key={t}
-                      className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-[11.5px] font-medium text-white/75"
+                      key={f}
+                      className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[12.5px] leading-snug text-white/75"
                     >
-                      {t}
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="mt-[1px] h-4 w-4 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.4}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ color: accent }}
+                        aria-hidden
+                      >
+                        <path d="m4 12.5 5 5L20 6.5" />
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {project.detail && (
+              <section className="mt-6">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
+                  Tentang project ini
+                </h2>
+                <Prose text={project.detail} />
+              </section>
+            )}
+
+            {project.gallery.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
+                  Screenshot
+                </h2>
+                <ul className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {project.gallery.map((g, i) => (
+                    <li key={`${g}-${i}`}>
+                      <a
+                        href={g}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-xl border border-white/10 bg-[#12121a] transition hover:border-white/30"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={optImg(g, { w: 520, h: 320, crop: "fill" })}
+                          alt={`Screenshot ${project.title} ${i + 1}`}
+                          width={520}
+                          height={320}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      </a>
                     </li>
                   ))}
                 </ul>

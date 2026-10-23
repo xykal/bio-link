@@ -801,6 +801,9 @@ export default function AdminPanel() {
     featured: false,
     order: 0,
     enabled: true,
+    detail: "",
+    features: [],
+    gallery: [],
   };
 
   const EMPTY_PRODUCT: ProductItem = {
@@ -2759,6 +2762,93 @@ export default function AdminPanel() {
                         placeholder="Kotlin, Android, Shizuku"
                       />
                     </Field>
+                    <div className="sm:col-span-2">
+                      <Field
+                        label="Detail panjang"
+                        hint="Markdown ringan: paragraf biasa, '## Judul', '- poin', **tebal**, `kode`, [tautan](https://…). Maks 4000 karakter."
+                      >
+                        <textarea
+                          className={inputCls}
+                          rows={8}
+                          value={projDraft.detail}
+                          onChange={(e) => setProjDraft({ ...projDraft, detail: e.target.value })}
+                          placeholder={"Penjelasan project dalam 2-4 paragraf.\n## Cara kerja\n- Poin pertama\n- Poin kedua"}
+                        />
+                      </Field>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Field label="Fitur utama" hint="Satu baris = satu poin (maks 10)">
+                        <textarea
+                          className={inputCls}
+                          rows={4}
+                          value={projDraft.features.join("\n")}
+                          onChange={(e) =>
+                            setProjDraft({
+                              ...projDraft,
+                              features: e.target.value
+                                .split("\n")
+                                .map((f) => f.trim())
+                                .filter(Boolean)
+                                .slice(0, 10),
+                            })
+                          }
+                          placeholder={"Tanpa root\nTanpa izin internet\n..."}
+                        />
+                      </Field>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Field label="Screenshot tambahan" hint="Maks 6 gambar. Klik untuk hapus.">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {projDraft.gallery.map((g, i) => (
+                              <button
+                                key={`${g}-${i}`}
+                                type="button"
+                                title="Hapus gambar"
+                                onClick={() =>
+                                  setProjDraft({
+                                    ...projDraft,
+                                    gallery: projDraft.gallery.filter((_, idx) => idx !== i),
+                                  })
+                                }
+                                className="group relative h-16 w-24 overflow-hidden rounded-lg border border-white/15"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={g} alt="" className="h-full w-full object-cover" />
+                                <span className="absolute inset-0 hidden items-center justify-center bg-black/60 text-xs font-bold text-rose-300 group-hover:flex">
+                                  Hapus
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="text-xs text-white/50"
+                            onChange={async (e) => {
+                              const files = Array.from(e.target.files || []);
+                              e.target.value = "";
+                              const room = Math.max(0, 6 - projDraft.gallery.length);
+                              const picked = files.slice(0, room);
+                              const urls: string[] = [];
+                              for (const file of picked) {
+                                const url = await pickImage("bio-link/project", file);
+                                if (url) urls.push(url);
+                              }
+                              if (urls.length)
+                                setProjDraft({
+                                  ...projDraft,
+                                  gallery: [...projDraft.gallery, ...urls].slice(0, 6),
+                                });
+                            }}
+                          />
+                          {uploadingId === "cover" && (
+                            <span className="text-[11px] text-white/40">Mengunggah…</span>
+                          )}
+                        </div>
+                      </Field>
+                    </div>
                     <Field label="URL Demo" hint="Kosongkan kalau belum ada">
                       <input
                         className={inputCls}

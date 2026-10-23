@@ -311,6 +311,10 @@ export type ProjectItem = {
   featured: boolean;
   order: number;
   enabled: boolean;
+  /** Deskripsi panjang (markdown ringan: paragraf, "## judul", "- poin"). */
+  detail: string;
+  features: string[]; // poin fitur utama (maks 10)
+  gallery: string[]; // screenshot tambahan (maks 6 URL)
 };
 
 export type ProductKind = "digital" | "service" | "physical";
@@ -529,6 +533,19 @@ const DEFAULT_STORE: Store = {
       featured: true,
       order: 0,
       enabled: true,
+      detail: `XyDesk Remote membuka sesi RDP ke PC Windows langsung dari tab browser — tanpa install client apa pun di perangkat yang dipakai.
+## Cara kerja
+Server kecil di PC tujuan menyambung ke Tailscale, lalu halaman web meneruskan input keyboard, mouse, dan frame layar lewat WebSocket.
+- Tidak perlu port forwarding atau IP publik
+- Bisa dibuka dari HP, tablet, atau komputer lain
+- Sesi diputus otomatis saat tab ditutup`,
+      features: [
+        "Remote desktop lewat browser, tanpa install client",
+        "Autentikasi lewat Tailscale, tanpa buka port router",
+        "Input keyboard & mouse realtime via WebSocket",
+        "Cocok buat kontrol PC dari HP",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -544,6 +561,19 @@ const DEFAULT_STORE: Store = {
       featured: true,
       order: 1,
       enabled: true,
+      detail: `AppPerms mengelola izin aplikasi Android yang biasanya cuma bisa diubah lewat ADB — sekarang cukup dari layar HP.
+## Kenapa dibuat
+Banyak tools (perekam layar, automation, display-over-other-apps) butuh izin khusus yang tidak muncul di menu Pengaturan biasa. Lewat Shizuku, AppPerms memberi akses itu tanpa root.
+- Ukuran kecil, tanpa izin internet
+- 19 operasi tersembunyi: appops, izin runtime, sampai terminal
+- Ada mode aman supaya tidak salah cabut izin sistem`,
+      features: [
+        "Tanpa root — cukup Shizuku",
+        "Tanpa izin internet sama sekali",
+        "19 operasi tersembunyi (appops, terminal, dll.)",
+        "Mode aman untuk mencegah salah setelan",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -559,6 +589,19 @@ const DEFAULT_STORE: Store = {
       featured: true,
       order: 2,
       enabled: true,
+      detail: `DLAja adalah front-end downloader yang cepat & rapi: tempel tautan, pilih kualitas, selesai.
+## Fokus
+Antarmuka dibuat sesederhana mungkin supaya bisa dipakai siapa saja, termasuk yang bukan orang teknis.
+- Dukungan banyak sumber lewat satu kolom tautan
+- Progres unduhan jelas, bisa dijeda
+- Riwayat unduhan tersimpan lokal`,
+      features: [
+        "Satu kolom untuk semua tautan",
+        "Progres & jeda unduhan",
+        "Riwayat tersimpan di perangkat",
+        "Antarmuka ringan, tanpa iklan",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -574,6 +617,18 @@ const DEFAULT_STORE: Store = {
       featured: false,
       order: 3,
       enabled: true,
+      detail: `Nyawit Live menghubungkan interaksi penonton dengan streamer secara realtime, dibuat untuk kebutuhan live streaming lokal.
+## Fitur utama
+- Overlay interaksi penonton di layar stream
+- Antrean request yang adil dan transparan
+- Ringan, bisa jalan di server kecil`,
+      features: [
+        "Overlay interaksi realtime",
+        "Antrean request transparan",
+        "Jalan di server kecil",
+        "Integrasi OBS / streaming tool",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -589,6 +644,16 @@ const DEFAULT_STORE: Store = {
       featured: false,
       order: 4,
       enabled: true,
+      detail: `XyRDP adalah pondasi RDP yang dipakai XyDesk Remote: penanganan sesi, encoding frame, dan pengaturan kualitas.
+## Catatan teknis
+Encoding adaptif menyesuaikan bandwidth, jadi sesi tetap enak dipakai walau koneksi rumah pas-pasan.`,
+      features: [
+        "Encoding frame adaptif",
+        "Kualitas menyesuaikan bandwidth",
+        "Manajemen sesi & reconnect",
+        "Fondasi untuk XyDesk Remote",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -604,6 +669,18 @@ const DEFAULT_STORE: Store = {
       featured: false,
       order: 5,
       enabled: true,
+      detail: `XyCloudStore adalah toko digital untuk produk akun & aplikasi: katalog, pembayaran, dan pengiriman otomatis dalam satu alur.
+## Yang ditangani
+- Katalog produk dengan stok
+- Pembayaran QRIS otomatis
+- Pengiriman detail akun setelah pembayaran terverifikasi`,
+      features: [
+        "Katalog + stok otomatis",
+        "Pembayaran QRIS otomatis",
+        "Pengiriman produk instan",
+        "Riwayat pesanan pembeli",
+      ],
+      gallery: [],
     },
     {
       id: randomUUID(),
@@ -619,6 +696,16 @@ const DEFAULT_STORE: Store = {
       featured: false,
       order: 6,
       enabled: true,
+      detail: `kilat-motion adalah library animasi kecil untuk web: transisi halus tanpa menambah berat bundle.
+## Prinsip
+Hanya animasi yang benar-benar dipakai, memanfaatkan transform & opacity supaya tetap 60 fps di HP kelas bawah.`,
+      features: [
+        "API ringan, tanpa dependensi",
+        "Animasi berbasis transform (GPU)",
+        "Menghormati prefers-reduced-motion",
+        "Cocok untuk landing page",
+      ],
+      gallery: [],
     },
   ],
   products: [],
@@ -870,6 +957,19 @@ export function normalize(parsed: Partial<Store>): Store {
               featured: p.featured === true,
               order: typeof p.order === "number" ? p.order : i,
               enabled: p.enabled !== false,
+              detail: typeof p.detail === "string" ? p.detail.slice(0, 4000) : "",
+              features: Array.isArray(p.features)
+                ? p.features
+                    .filter((f): f is string => typeof f === "string" && Boolean(f.trim()))
+                    .map((f) => f.trim().slice(0, 90))
+                    .slice(0, 10)
+                : [],
+              gallery: Array.isArray(p.gallery)
+                ? p.gallery
+                    .filter((g): g is string => typeof g === "string" && Boolean(g.trim()))
+                    .map((g) => g.trim().slice(0, 500))
+                    .slice(0, 6)
+                : [],
             }))
         : [...d.projects]
     ),

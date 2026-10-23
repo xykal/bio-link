@@ -43,6 +43,8 @@ export type PublicData = {
   products: ProductItem[];
   shop: ShopConfig;
   donation: DonationConfig;
+  /** Peta ikon tech (diisi server) supaya client tidak perlu unduh simple-icons. */
+  techIndex?: Record<string, { slug: string; title: string; hex: string; path: string }>;
   tabs: Store["tabs"];
   rulesUrl: string;
 };
@@ -197,6 +199,7 @@ function toPublic(s: Store): PublicData {
       ? (s.products || []).filter((p) => p.enabled).sort((a, b) => a.order - b.order)
       : [],
     shop: s.shop || { enabled: false, headline: "Shop", note: "", methods: ["qris"] },
+    techIndex: (s as Store & { techIndex?: PublicData["techIndex"] }).techIndex,
     donation:
       s.donation || {
         enabled: false,
@@ -1239,7 +1242,11 @@ export default function BioPage({
           )}
 
           {view === "project" && (
-            <ProjectGrid projects={data?.projects || []} isLight={!!isLight} />
+            <ProjectGrid
+              projects={data?.projects || []}
+              techIndex={data?.techIndex}
+              isLight={!!isLight}
+            />
           )}
 
           {view === "shop" && (

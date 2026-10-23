@@ -1,5 +1,6 @@
 import { pakasirConfigured } from "@/lib/pakasir";
 import { readStore } from "@/lib/data";
+import { withTechIndex } from "@/lib/techResolve";
 
 // Data publik buat halaman bio. Rute ini pernah ada di deploy lama tapi hilang
 // dari repo, padahal BioPage masih fetch ke sini — tanpa rute ini halaman cuma
@@ -21,7 +22,7 @@ function hashJson(text: string): string {
 }
 
 export async function GET(req: Request) {
-  const s = await readStore();
+  const s = withTechIndex(await readStore());
   const payload = {
     profile: s.profile,
     links: s.links.filter((l) => l.enabled).sort((a, b) => a.order - b.order),
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
       : [],
     shop: { ...s.shop, payReady: pakasirConfigured },
     donation: s.donation,
+    techIndex: s.techIndex,
     tabs: s.tabs,
     rulesUrl: s.seo.rulesUrl,
   };
