@@ -517,7 +517,20 @@ export default function BioPage({
         })
         .catch(() => {});
     };
-    const timer = window.setInterval(refresh, 20000);
+    // 90 dtk (bukan 20 dtk): kuota Workers akun ini dipakai bersama Worker lain,
+    // jadi halaman ini harus jadi tetangga yang hemat. Perubahan admin tetap
+    // langsung terlihat saat tab kembali fokus (listener di bawah).
+    let lastTouch = Date.now();
+    const touch = () => {
+      lastTouch = Date.now();
+    };
+    window.addEventListener("pointerdown", touch, { passive: true });
+    window.addEventListener("keydown", touch);
+    const timer = window.setInterval(() => {
+      // tab dibiarkan terbuka berjam-jam tanpa interaksi -> berhenti polling
+      if (Date.now() - lastTouch > 10 * 60_000) return;
+      refresh();
+    }, 90000);
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
@@ -527,6 +540,8 @@ export default function BioPage({
     return () => {
       alive = false;
       window.clearInterval(timer);
+      window.removeEventListener("pointerdown", touch);
+      window.removeEventListener("keydown", touch);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);

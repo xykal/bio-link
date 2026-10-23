@@ -122,6 +122,7 @@ export default function ProjectGrid({
           >
             <Link
               href={`/project/${p.slug}`}
+              prefetch={false}
               aria-label={`Detail project ${p.title}`}
               className="relative block aspect-[16/9] w-full overflow-hidden"
             >
@@ -156,7 +157,7 @@ export default function ProjectGrid({
 
             <div className="flex flex-1 flex-col p-4">
               <h3 className="text-[15px] font-bold leading-tight">
-                <Link href={`/project/${p.slug}`} className="transition hover:text-white">
+                <Link href={`/project/${p.slug}`} prefetch={false} className="transition hover:text-white">
                   {p.title}
                 </Link>
               </h3>
@@ -183,6 +184,7 @@ export default function ProjectGrid({
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   href={`/project/${p.slug}`}
+                  prefetch={false}
                   className="flex-1 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-center text-[12px] font-semibold text-white/80 transition hover:bg-white/[0.12]"
                 >
                   Detail
