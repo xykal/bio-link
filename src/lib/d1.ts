@@ -70,6 +70,15 @@ async function d1QueryRestOnce(sql: string, params: unknown[] = []): Promise<D1R
   return json.result as D1ResultSet[];
 }
 
+// Skema minimal. Dibuat otomatis kalau database masih kosong (mis. D1 baru
+// atau emulasi lokal D1 di `next dev`), supaya app tidak 500 hanya karena
+// tabel belum ada.
+const SCHEMA_SQL = [
+  "CREATE TABLE IF NOT EXISTS store (id INTEGER PRIMARY KEY, data TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS api_rate_limits (bucket TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+];
+let schemaEnsured = false;
+
 /** Ada storage bersama yang bisa dipakai? (binding native atau REST) */
 export function d1Available(): boolean {
   return d1Binding() !== null || useD1Rest;
@@ -78,7 +87,7 @@ export function d1Available(): boolean {
 export async function d1Query(sql: string, params: unknown[] = []): Promise<D1ResultSet[]> {
   const db = d1Binding();
   let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       // Binding native: satu panggilan langsung, tanpa retry jaringan berlebih.
       if (db) return await d1QueryBinding(db, sql, params);
@@ -86,6 +95,20 @@ export async function d1Query(sql: string, params: unknown[] = []): Promise<D1Re
       return await d1QueryRestOnce(sql, params);
     } catch (error) {
       lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      // Database kosong (D1 baru / emulasi lokal): buat tabel lalu ulangi.
+      if (!schemaEnsured && /no such table/i.test(message)) {
+        schemaEnsured = true;
+        try {
+          for (const stmt of SCHEMA_SQL) {
+            if (db) await d1QueryBinding(db, stmt);
+            else await d1QueryRestOnce(stmt);
+          }
+        } catch {
+          /* biarkan error asli yang dilaporkan */
+        }
+        continue;
+      }
       if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
     }
   }

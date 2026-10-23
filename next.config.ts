@@ -27,7 +27,11 @@ const nextConfig: NextConfig = {
 
 export default nextConfig;
 
-// Aktifkan binding Cloudflare (D1, dsb) saat `next dev` lokal.
-// Kalau tidak dipanggil, getCloudflareContext() tidak tersedia di dev.
+// Aktifkan binding Cloudflare (D1, dsb) HANYA saat `next dev`.
+// Penting: kalau dipanggil juga di `next start`/produksi-Node, getCloudflareContext()
+// mengembalikan emulasi D1 lokal yang kosong — query "no such table" lalu semua
+// request 500, padahal tanpa binding seharusnya jatuh ke mode file/REST.
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-initOpenNextCloudflareForDev();
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev();
+}
