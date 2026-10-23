@@ -27,6 +27,35 @@
 
 ---
 
+### 2026-10-23 (lanjutan 2) - Bersih-bersih emoji & optimasi performa
+**Status:** Done
+
+**Keluhan pemilik:** "masih pakai emoji" + "web berat/lag".
+
+**Emoji dihapus (diganti SVG inline, tanpa dependensi baru):**
+- Tombol mute kartu donasi: 🔔/🔇 -> ikon speaker (stroke).
+- Badge "★ Unggulan" di kartu project -> ikon bintang path.
+
+**Optimasi performa (terukur, bukan tebakan):**
+- **Cover project sekarang lokal**: 7 cover di-`public/covers/*.webp` (11-17 KB/WebP, total 116 KB) hasil render kartu OG GitHub yang di-cache. Sebelumnya tiap scroll memanggil `opengraph.githubassets.com` (≈130 KB PNG per gambar, bisa rate-limit 429 -> gambar gagal/hilang). Efek samping: bug "cover ada yang tidak muncul" ikut beres.
+- **Fallback gambar diperbaiki**: `onError` sekarang benar-benar pindah kandidat (dulu memakai `attempt = a + 1` tanpa batas sehingga bisa menunjuk `undefined`). Rantai: cover lokal -> `github.com/<repo>.png` -> gradient + inisial.
+- **Font Google dipangkas**: Inter & Space Grotesk sekarang **variable font** (`wght@400..700`, 1 file per family) — sebelumnya 4 file weight per family. Total request font turun dari ~11 menjadi ~5.
+- **`backdrop-filter` dikurangi**: kartu project, tab nav, badge, dan kartu donasi tidak lagi pakai `backdrop-blur` (filter ini memaksa repaint besar tiap scroll). Sisa blur hanya di overlay modal/story.
+- **Bayangan koin dibakar ke aset**: `filter: drop-shadow()` pada elemen yang dianimasikan (transform) memaksa raster ulang tiap frame — sekarang bayangan sudah menempel di WebP, CSS cukup `will-change: transform`.
+- **Polling auto-refresh jadi gratis**: `/api/data` mengirim `ETag` (hash FNV-1a) dan membalas **304 tanpa body** kalau isi belum berubah. Klien mengirim `If-None-Match`. Terukur: 200 = 7,6 KB (brotli) -> 304 = **0 byte**.
+- **Animasi berhenti saat tab disembunyikan** (`.anim-paused`), supaya morph blob & hue-rotate frame profil tidak terus memakan CPU/baterai di background.
+- **Header cache aset**: `public/_headers` menambah aturan `/covers/*`, `/donation-coin.webp`, `/donation-coins.webp` -> `max-age=604800, stale-while-revalidate`.
+
+**Angka terukur di produksi (curl, brotli):**
+- TTFB beranda ≈ **0,45-0,67 s**; HTML beranda ≈ **16 KB** terkompresi (76 KB mentah).
+- JS awal ≈ **200 KB** terkompresi (React 19 + Next 16 runtime, dominan framework — bukan kode app).
+- `/api/data`: 7,6 KB -> **0 B** dengan ETag.
+
+**Next Step (kalau masih terasa berat):**
+- Kalau mau lebih ringan lagi: pecah `BioPage` jadi island server + komponen kecil, atau matikan efek morph/hue-rotate secara default di HP kelas bawah.
+
+---
+
 ### 2026-10-23 (lanjutan) - Cover project anti-gagal, auto-refresh, kartu donasi 3D
 **Status:** Done
 
