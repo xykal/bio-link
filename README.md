@@ -108,10 +108,12 @@ npm test                         # tes manual r15: perpindahan story & voice not
 ## ☁️ Deploy (Cloudflare Workers)
 
 ```bash
-npx tsc --noEmit && npm run lint     # gate lokal
-npx wrangler secret bulk secrets.json   # sekali: ADMIN_PASSWORD, SESSION_SECRET, CRON_SECRET, CLOUDINARY_*
-npm run deploy                       # build OpenNext + deploy ke Worker `bio-link`
+npx tsc --noEmit && npm run lint        # gate lokal
+CLOUDFLARE_API_TOKEN=xxx SECRETS_FILE=./secrets.json ./scripts/deploy-cf.sh
 ```
+
+Script itu: cek token → upload secret (`ADMIN_PASSWORD`, `SESSION_SECRET`, `CRON_SECRET`, `CLOUDINARY_*`) → build OpenNext + deploy → verifikasi `/`, `/api/data`, `/admin`. Manual: `npx wrangler secret bulk secrets.json` lalu `npm run deploy`.
+Langkah lengkap + troubleshooting ada di [`docs/DEPLOY-CLOUDFLARE.md`](docs/DEPLOY-CLOUDFLARE.md).
 
 - Worker: `bio-link`, custom domain `bio.haekal.web.id`, Cron Trigger `15 20 * * *` (03:15 WIB).
 - Konfigurasi ada di `wrangler.jsonc`; entry Worker di `worker.ts` (fetch + scheduled).
