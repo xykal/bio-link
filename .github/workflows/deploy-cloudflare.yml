@@ -18,24 +18,56 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # PENGAMAN MODE DARURAT: kalau bio.haekal.web.id sedang diarahkan ke
+      # halaman statis (Pages `bio-link-emergency`) karena kuota Workers akun
+      # habis, deploy DILEWATI. Tanpa ini, `wrangler deploy` memasang lagi
+      # custom domain ke Worker dan halaman darurat langsung tertendang 429.
+      # Dipulihkan otomatis oleh workflow `Emergency Restore`.
+      - name: Cek mode darurat
+        id: mode
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          attached=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/bio-link-emergency/domains/bio.haekal.web.id" \
+            | python3 -c "import json,sys; r=json.load(sys.stdin).get('result') or {}; print(r.get('name',''))" || true)
+          # Fail-safe kedua: cek apa yang benar-benar tampil ke pengunjung.
+          if curl -s --max-time 20 -A "Mozilla/5.0" https://bio.haekal.web.id/ | grep -q "Mode hemat"; then
+            attached="bio.haekal.web.id (terdeteksi dari halaman live)"
+          fi
+          if [ -n "$attached" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Mode darurat aktif — deploy Worker dilewati demi menjaga halaman statis tetap hidup."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.mode.outputs.skip != 'true'
       - uses: actions/setup-node@v4
+        if: steps.mode.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies
+        if: steps.mode.outputs.skip != 'true'
         run: npm ci
       - name: Typecheck
+        if: steps.mode.outputs.skip != 'true'
         run: npx tsc --noEmit
       - name: Lint
+        if: steps.mode.outputs.skip != 'true'
         run: npm run lint
       # `wrangler deploy` mendeteksi project OpenNext dan meneruskan ke
       # `opennextjs-cloudflare deploy`, yang butuh hasil build di `.open-next`.
       # Jadi build dulu di step terpisah (tanpa ini error:
       # "Could not find compiled Open Next config").
       - name: Build OpenNext bundle
+        if: steps.mode.outputs.skip != 'true'
         run: npx opennextjs-cloudflare build
       - name: Deploy to Cloudflare Workers
+        if: steps.mode.outputs.skip != 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

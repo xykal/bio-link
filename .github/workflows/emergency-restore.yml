@@ -1,0 +1,110 @@
+name: Emergency Restore
+
+# Kuota harian Cloudflare Workers (free plan) = 100.000 request/hari per AKUN
+# dan reset pukul 00:00 UTC. Saat kuota habis, SEMUA Worker di akun ini balas
+# 429 — termasuk bio-link — jadi domain dialihkan ke halaman statis
+# (Pages project `bio-link-emergency`, lihat scripts/emergency-static.sh).
+#
+# Workflow ini memantau tiap 20 menit: begitu Worker bio-link bisa diakses lagi
+# (probe ke workers.dev, tidak tergantung domain), domain dibalikin ke Worker.
+# Kalau setelah dipulihkan ternyata masih gagal, otomatis balik ke halaman statis.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emergency-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Pulihkan domain ke Worker kalau kuota sudah reset
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_PROBE: https://bio-link.dikanjut.workers.dev/api/data
+      SITE: https://bio.haekal.web.id
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cek perlu dipulihkan atau tidak
+        id: cek
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN belum diset."
+            exit 1
+          fi
+
+          # 1) Apakah domain memang sedang diarahkan ke halaman statis?
+          attached=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/bio-link-emergency/domains/bio.haekal.web.id" \
+            | python3 -c "import json,sys; r=json.load(sys.stdin).get('result') or {}; print(r.get('name',''))" || true)
+
+          if [ -z "$attached" ]; then
+            echo "Mode normal: domain tidak terpasang di halaman darurat. Tidak ada yang perlu dikerjakan."
+            echo "restore=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Mode darurat aktif (domain di Pages)."
+
+          # 2) Probe Worker lewat workers.dev — tidak lewat domain, jadi bebas
+          #    dari pengalihan Pages. 200 = kuota sudah tersedia lagi.
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/probe.json -w "%{http_code}" --max-time 20 "$WORKER_PROBE" || echo 000)
+            echo "probe #$i -> HTTP $code"
+            if [ "$code" = "200" ] && head -c 1 /tmp/probe.json | grep -q '{'; then
+              echo "Worker bio-link sudah hidup lagi."
+              echo "restore=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 20
+          done
+
+          echo "Worker masih 429 (kuota harian belum reset). Halaman statis dibiarkan aktif."
+          echo "restore=false" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.cek.outputs.restore == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.cek.outputs.restore == 'true'
+        run: npm ci
+
+      - name: Alihkan domain kembali ke Worker
+        if: steps.cek.outputs.restore == 'true'
+        run: bash scripts/emergency-static.sh off
+
+      - name: Verifikasi, rollback ke halaman statis kalau gagal
+        if: steps.cek.outputs.restore == 'true'
+        run: |
+          set -euo pipefail
+          ok=false
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /tmp/live.json -w "%{http_code}" --max-time 20 -A "Mozilla/5.0" "$SITE/api/data" || echo 000)
+            echo "verifikasi #$i -> HTTP $code"
+            if [ "$code" = "200" ] && head -c 1 /tmp/live.json | grep -q '{'; then ok=true; break; fi
+            grep -q "temporarily rate limited" /tmp/live.json 2>/dev/null && { echo "Masih kena 429."; break; } || true
+            sleep 10
+          done
+
+          if [ "$ok" = "true" ]; then
+            echo "::notice::bio.haekal.web.id kembali dilayani Worker bio-link."
+            curl -s -o /dev/null -w "cek / : %{http_code}\n" -A "Mozilla/5.0" "$SITE/"
+            exit 0
+          fi
+
+          echo "::warning::Pemulihan gagal — mengembalikan halaman statis supaya situs tidak mati."
+          bash scripts/emergency-static.sh on
+          exit 1
