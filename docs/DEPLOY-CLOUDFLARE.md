@@ -70,6 +70,34 @@ npx wrangler secret bulk /home/user/secrets.json
 # CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 ```
 
+### 2b. Secret tambahan untuk Shop (Pakasir)
+
+Shop memakai QRIS Pakasir. Kalau dua secret ini belum ada, `/api/shop/order` membalas
+`503` dan tombol beli menampilkan pesan "pembayaran belum aktif" — sisa situs tetap normal.
+
+```bash
+npx wrangler secret put PAKASIR_PROJECT   # slug project Pakasir, mis. bio-haekal
+npx wrangler secret put PAKASIR_API_KEY   # API key dari dashboard Pakasir
+```
+
+Uji setelah terpasang:
+
+```bash
+# 1) buat transaksi percobaan
+curl -s -X POST https://app.pakasir.com/api/transactioncreate/qris \
+  -H 'Content-Type: application/json' \
+  -d '{"project":"SLUG","order_id":"TEST1","amount":1000,"api_key":"KEY"}'
+# 2) simulasikan pembayaran berhasil
+curl -s -X POST https://app.pakasir.com/api/paymentsimulation \
+  -H 'Content-Type: application/json' \
+  -d '{"project":"SLUG","order_id":"TEST1","amount":1000,"api_key":"KEY"}'
+```
+
+Setelah itu cek halaman `/shop`, klik **Beli Sekarang**, dan pastikan status order berubah
+jadi `completed` (polling maksimal 6 detik) lalu stok berkurang.
+
+> Jangan pakai API key Pakasir yang ketemu di repo publik orang lain — uang masuk ke akun mereka.
+
 ## 3. Deploy
 
 ```bash
