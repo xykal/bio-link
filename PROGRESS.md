@@ -52,8 +52,16 @@
 - `tsc --noEmit` + `eslint src` bersih; `npm run build` & `opennextjs-cloudflare build` sukses.
 - Uji `wrangler dev`: `/`, `/project`, `/shop`, kedua aset WebP = 200; HTML SSR sudah memuat animasi (`donFloatA`) dan gambar.
 
+**Update layout (revisi pemilik):** kartu dibuat lebih besar (padding 24px, judul 20–23px), dan elemen 3D
+dipindah **benar-benar di luar kartu** — tumpukan koin di atas-kiri (dalam ruang kosong `pt`), koin tunggal
+di bawah-kanan; tidak ada teks yang tertutup. Padding kartu 26px→28px diubah jadi `pt-[78px]`/`sm:pt-[100px]`
+pada wrapper supaya koin punya tempat sendiri.
+
+**Status produksi:** kartu donasi sudah **aktif** di https://bio.haekal.web.id dengan link `https://saweria.co/kallsptra`
+(target 0 = progress bar disembunyikan).
+
 **Next Step:**
-- Isi target/terkumpul donasi dari panel kalau mau progress bar-nya tampil.
+- Isi target/terkumpul donasi dari panel (Shop → Kartu Donasi) kalau mau progress bar-nya tampil.
 - Ganti link donasi kalau bukan Saweria `saweria.co/kallsptra`.
 
 ---
