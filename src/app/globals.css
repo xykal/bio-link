@@ -235,3 +235,11 @@ body {
   background: #3a3a46;
   background-clip: content-box;
 }
+
+/* Tab background: matikan animasi. Sebelumnya morph blob + hue-rotate frame
+   profil tetap jalan walau tab tidak terlihat -> CPU naik percuma. */
+.anim-paused *,
+.anim-paused *::before,
+.anim-paused *::after {
+  animation-play-state: paused !important;
+}

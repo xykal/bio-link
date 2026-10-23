@@ -489,12 +489,23 @@ export default function BioPage({
   // - langsung ambil ulang saat tab kembali fokus / browser online lagi
   useEffect(() => {
     let alive = true;
+    // ETag terakhir: kalau isi store belum berubah, server balas 304 dan
+    // browser tidak mengunduh ulang JSON-nya (hemat kuota + baterai).
+    let etag = "";
     const refresh = () => {
       if (!alive) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       // fetch diam-diam: tidak menyentuh state loading / error
-      fetch("/api/data", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
+      const headers: Record<string, string> = {};
+      if (etag) headers["If-None-Match"] = etag;
+      fetch("/api/data", { cache: "no-store", headers })
+        .then((r) => {
+          if (r.status === 304) return null;
+          if (!r.ok) return null;
+          const next = r.headers.get("etag");
+          if (next) etag = next;
+          return r.json();
+        })
         .then((d: PublicData | null) => {
           if (alive && d) {
             setData(d);
@@ -545,6 +556,15 @@ export default function BioPage({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(getAttribution()),
     }).catch(() => {});
+  }, []);
+
+  // Hemat CPU/baterai: saat tab disembunyikan, semua animasi CSS dihentikan.
+  // (Browser tetap menjalankan animasi di tab background -> laptop/HP jadi panas.)
+  useEffect(() => {
+    const root = document.documentElement;
+    const onVis = () => root.classList.toggle("anim-paused", document.visibilityState === "hidden");
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   // Prefetch chunk StoryViewer saat senggang (2,5 dtk setelah load): begitu

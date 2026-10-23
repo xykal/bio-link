@@ -88,7 +88,7 @@ export default function DonationBanner({
           alt=""
           width={420}
           height={347}
-          className="don-float-a absolute -left-1 top-0 w-[104px] drop-shadow-[0_18px_28px_rgba(0,0,0,0.5)] sm:-left-6 sm:w-[132px]"
+          className="don-float-a absolute -left-1 top-0 w-[104px] sm:-left-6 sm:w-[132px]"
         />
         {/* koin tunggal (kanan bawah, di luar kartu) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -97,7 +97,7 @@ export default function DonationBanner({
           alt=""
           width={260}
           height={141}
-          className={`don-float-b absolute -right-2 top-[calc(100%+6px)] w-[104px] drop-shadow-[0_14px_22px_rgba(0,0,0,0.5)] sm:-right-7 sm:w-[126px] ${
+          className={`don-float-b absolute -right-2 top-[calc(100%+6px)] w-[104px] sm:-right-7 sm:w-[126px] ${
             pulse ? "don-pop" : ""
           }`}
         />
@@ -248,9 +248,11 @@ export default function DonationBanner({
           __html: `
         .don-float-a {
           animation: donFloatA 7s ease-in-out infinite;
+          will-change: transform;
         }
         .don-float-b {
           animation: donFloatB 5.5s ease-in-out infinite;
+          will-change: transform;
         }
         .don-twinkle {
           animation: donTwinkle 2.6s ease-in-out infinite;
