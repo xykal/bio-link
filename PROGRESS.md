@@ -27,6 +27,39 @@
 
 ---
 
+### 2026-10-23 (lanjutan 5) - Konten detail project + chip stack berlogo
+**Status:** Done
+
+**Yang dikerjain:**
+- **Field baru di project**: `detail` (markdown ringan, maks 4000 karakter), `features` (maks 10 poin),
+  `gallery` (maks 6 screenshot). Semua divalidasi di `normalize()`.
+- **Halaman detail `/project/[slug]`** sekarang punya: chip tech stack **berlogo asli**, daftar **Fitur utama**
+  (checklist 2 kolom), section **Tentang project ini** (renderer markdown), dan **Screenshot** (klik = buka ukuran penuh).
+- **Renderer markdown ringan** (`src/components/Prose.tsx`, tanpa dependensi): paragraf, `## judul`, `- poin`,
+  `**tebal**`, `` `kode` ``, `[tautan](https://…)`. Dirender sebagai elemen React (bukan innerHTML) -> aman dari XSS.
+- **Chip stack pakai logo GitHub-style**: `src/lib/techResolve.ts` memetakan label bebas ("Next.js", "C#",
+  "Jetpack Compose", "Tailscale") ke ikon simple-icons. Label tanpa logo resmi (Multiplayer, Midtrans,
+  PowerShell, Canvas) tampil sebagai titik warna aksen — sama seperti daftar bahasa di repo GitHub.
+- **Ikon tetap ringan di publik**: `techIndex` (hanya tech yang dipakai, 11 entri / ±4 KB) dikirim dari server
+  lewat `/api/data` & props SSR; `simple-icons` **tidak** masuk bundle browser.
+- Panel admin: 3 field baru (Detail panjang, Fitur utama satu-baris-satu-poin, Screenshot multi-upload + hapus).
+- `featureList` & `screenshot` ditambahkan ke JSON-LD `SoftwareApplication`.
+
+**Migrasi data produksi:** 7 project di D1 masih kosong `detail`/`features` -> diisi lewat PATCH admin
+(413/465/324/262/229/256/219 karakter + 4 fitur masing-masing). Terverifikasi di halaman live.
+
+**Verifikasi produksi:**
+- `/project/appperms`: heading "Kenapa dibuat" render, 4 item fitur, 3 chip berlogo, `featureList` 4 entri di JSON-LD.
+- `/api/data`: `techIndex` 11 entri; 11/14 label stack dapat logo, 3 sisanya titik warna (memang tak punya logo).
+- `/project`: 12 chip berlogo di kartu grid.
+
+**Next Step:**
+- Upload 1-2 screenshot asli per project dari panel (field Screenshot) — halaman akan jauh lebih meyakinkan
+  dan menambah `screenshot` di structured data.
+- Panjangkan `detail` kalau mau ngejar keyword spesifik per project.
+
+---
+
 ### 2026-10-23 (lanjutan 4) - Halaman detail per project (SEO long-tail)
 **Status:** Done
 
