@@ -29,12 +29,12 @@ done
 git config user.name "xykal"
 git config user.email "xykal@users.noreply.github.com"
 
-if git diff --quiet -- "$OUT"; then
+git add -A -- "$OUT"
+# `git diff` tidak melihat file baru -> cek staged diff setelah `git add`.
+if git diff --cached --quiet -- "$OUT"; then
   echo "Tidak ada perubahan screenshot."
   exit 0
 fi
-
-git add "$OUT"
 git commit -m "shots: screenshot dari emulator Android (GitHub Actions)"
 
 # push dengan retry (deploy lain mungkin sedang jalan)
